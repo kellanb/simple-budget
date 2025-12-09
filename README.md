@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cash Flow Forecaster
 
-## Getting Started
+Mobile-first cash flow planner built with Next.js 16, Tailwind v4, Shadcn-inspired UI, Convex (schema + functions), and @dnd-kit for ordering.
 
-First, run the development server:
+## Quick start
 
+1) Install deps
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2) Configure Convex (needs interactive auth with your Convex account)
+```bash
+# set your Convex deployment URL in .env.local
+echo 'NEXT_PUBLIC_CONVEX_URL=<your_convex_url>' > .env.local
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# then configure Convex (will prompt)
+npx convex dev
+```
+This creates `convex.json`, generates `_generated/*`, and starts the dev backend.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3) Run Next.js
+```bash
+npm run dev
+```
 
-## Learn More
+## What’s included
+- Auth: email/password prototype stored in Convex (`convex/auth.ts` + `sessions` table).
+- Schema: `users`, `sessions`, `months`, `transactions` with savings fields and recurring/template flags.
+- Core UI: mobile-first sticky header with current/projected balances, month selector, add/edit transaction sheet, new month wizard, drag-and-drop ordering, paid toggles, savings percentage mode.
+- Utilities: balance calculator (`src/lib/balances.ts`) with dynamic savings resolution.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+- The Convex CLI must run once to generate typed clients; the repo ships with lightweight stubs so the UI compiles, but real data needs `npx convex dev`.
+- Set `NEXT_PUBLIC_CONVEX_URL` to your dev deployment (from Convex dashboard or `convex dev` output).
+- Tailwind is v4 CSS-first; UI primitives live in `src/components/ui`.
