@@ -20,7 +20,7 @@ export function SheetContent({
       <DialogPrimitive.Content
         aria-describedby={undefined}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-3xl border border-zinc-200 bg-white p-4 shadow-xl data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom dark:border-zinc-800 dark:bg-zinc-900",
+          "dialog-content-centered z-50 w-[calc(100%-2rem)] max-w-md rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in dark:border-zinc-800 dark:bg-zinc-900 max-h-[85vh] overflow-y-auto",
           className,
         )}
         {...props}

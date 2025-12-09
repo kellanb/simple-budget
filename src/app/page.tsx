@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import type { DragEndEvent } from "@dnd-kit/core";
-import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, useSensor, useSensors, DragOverlay, closestCenter } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
+  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -129,25 +131,48 @@ export default function Home() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
+      activationConstraint: { distance: 8 },
     }),
   );
 
-  const onDragEnd = async (event: DragEndEvent) => {
-    if (!transactions || !user || !currentMonth) return;
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [localTransactions, setLocalTransactions] = useState<Transaction[] | null>(null);
+  
+  // Sync local transactions with server data
+  useEffect(() => {
+    if (transactions) {
+      setLocalTransactions(transactions);
+    }
+  }, [transactions]);
 
-    const oldIndex = transactions.findIndex((t) => t._id === active.id);
-    const newIndex = transactions.findIndex((t) => t._id === over.id);
-    const reordered = [...transactions];
-    const [moved] = reordered.splice(oldIndex, 1);
-    reordered.splice(newIndex, 0, moved);
-    const orderedIds = reordered.map((t, idx) => {
-      t.order = idx;
-      return t._id;
-    });
+  const displayTransactions = localTransactions ?? transactions;
+  const activeTransaction = displayTransactions?.find((t) => t._id === activeId);
+
+  const onDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const onDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    
+    if (!displayTransactions || !user || !currentMonth || !over || active.id === over.id) return;
+
+    const oldIndex = displayTransactions.findIndex((t) => t._id === active.id);
+    const newIndex = displayTransactions.findIndex((t) => t._id === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+    
+    // Optimistically update local state immediately
+    const reordered = arrayMove(displayTransactions, oldIndex, newIndex);
+    setLocalTransactions(reordered);
+    
+    const orderedIds = reordered.map((t) => t._id);
     await reorderTx({ token: user.token, monthId: currentMonth._id, orderedIds });
+  };
+
+  const onDragCancel = () => {
+    setActiveId(null);
   };
 
   // Create month on-demand when needed
@@ -312,19 +337,27 @@ export default function Home() {
           <Card className="border-none bg-transparent shadow-none">
             <CardContent className="p-0">
               <ScrollArea className="max-h-[70vh]">
-                {monthExists && transactions ? (
-                  <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+                {monthExists && displayTransactions ? (
+                  <DndContext 
+                    sensors={sensors} 
+                    collisionDetection={closestCenter}
+                    onDragStart={onDragStart}
+                    onDragEnd={onDragEnd}
+                    onDragCancel={onDragCancel}
+                    modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                  >
                     <SortableContext
-                      items={transactions.map((t) => t._id)}
+                      items={displayTransactions.map((t) => t._id)}
                       strategy={verticalListSortingStrategy}
                     >
                       <div className="space-y-3">
-                        {transactions.map((tx) => (
+                        {displayTransactions.map((tx) => (
                           <TransactionRow
                             key={tx._id}
                             transaction={tx}
                             projectedBalance={balances.projectedBalances[tx._id]}
                             currency={currentMonth?.currency ?? "USD"}
+                            isDragging={activeId === tx._id}
                             onEdit={() => {
                               setEditing(tx);
                               setAddOpen(true);
@@ -339,13 +372,22 @@ export default function Home() {
                             }
                           />
                         ))}
-                        {transactions.length === 0 && (
+                        {displayTransactions.length === 0 && (
                           <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
                             No transactions yet. Add your first item to start forecasting.
                           </div>
                         )}
                       </div>
                     </SortableContext>
+                    <DragOverlay>
+                      {activeTransaction ? (
+                        <TransactionRowOverlay
+                          transaction={activeTransaction}
+                          projectedBalance={balances.projectedBalances[activeTransaction._id]}
+                          currency={currentMonth?.currency ?? "USD"}
+                        />
+                      ) : null}
+                    </DragOverlay>
                   </DndContext>
                 ) : (
                   <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
@@ -397,35 +439,36 @@ function Header({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-1">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <button
           onClick={onPrevMonth}
-          className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="rounded-lg pr-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           aria-label="Previous month"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
         <button
           onClick={() => setPickerOpen(true)}
-          className="min-w-[140px] rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+          className="min-w-[120px] rounded-xl border border-zinc-300 bg-white px-2 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
         >
           {monthLabel(year, monthIndex)}
         </button>
         <button
           onClick={onNextMonth}
-          className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="rounded-lg pl-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           aria-label="Next month"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 shrink-0">
         <Button 
           variant="outline" 
           size="icon" 
           onClick={toggleTheme} 
           title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+          className="h-8 w-8"
         >
           {theme === "light" ? (
             <Moon className="h-4 w-4" />
@@ -433,7 +476,7 @@ function Header({
             <Sun className="h-4 w-4" />
           )}
         </Button>
-        <Button variant="outline" size="icon" onClick={onSignOut} title="Sign out">
+        <Button variant="outline" size="icon" onClick={onSignOut} title="Sign out" className="h-8 w-8">
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
@@ -466,12 +509,26 @@ function MonthYearPicker({
   const [tempMonthIndex, setTempMonthIndex] = useState(monthIndex);
   const [wasOpen, setWasOpen] = useState(false);
   
-  const monthListRef = useRef<HTMLDivElement>(null);
+  const monthScrollRef = useRef<HTMLDivElement>(null);
   const yearListRef = useRef<HTMLDivElement>(null);
+  const isRepositioning = useRef(false);
 
   // Generate years (10 years back, 10 years forward)
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+
+  // Create repeating months for infinite scroll effect (3 full cycles for smoother looping)
+  const REPEAT_COUNT = 3;
+  const MIDDLE_CYCLE = 1;
+  const ITEM_HEIGHT = 40; // h-10 = 40px
+  const VIEWPORT_HEIGHT = 176; // h-44 = 176px
+  
+  const repeatedMonths = Array.from({ length: MONTH_NAMES.length * REPEAT_COUNT }, (_, i) => ({
+    index: i % 12,
+    name: MONTH_NAMES[i % 12],
+    cycle: Math.floor(i / 12),
+    uniqueKey: i,
+  }));
 
   // Reset temp values when opening (using derived state pattern)
   if (open && !wasOpen) {
@@ -482,18 +539,49 @@ function MonthYearPicker({
     setWasOpen(false);
   }
 
+  // Scroll to the middle cycle on initial open
   useEffect(() => {
     if (open) {
-      // Scroll to selected values after opening
       const timer = setTimeout(() => {
-        const monthItem = monthListRef.current?.querySelector(`[data-month="${tempMonthIndex}"]`);
+        const scrollContainer = monthScrollRef.current;
+        if (scrollContainer) {
+          // Calculate scroll position to center the selected month in middle cycle
+          const targetIndex = MIDDLE_CYCLE * 12 + tempMonthIndex;
+          const scrollTop = targetIndex * ITEM_HEIGHT - (VIEWPORT_HEIGHT / 2) + (ITEM_HEIGHT / 2);
+          scrollContainer.scrollTop = scrollTop;
+        }
         const yearItem = yearListRef.current?.querySelector(`[data-year="${tempYear}"]`);
-        monthItem?.scrollIntoView({ block: "center" });
-        yearItem?.scrollIntoView({ block: "center" });
+        yearItem?.scrollIntoView({ block: "center", behavior: "instant" });
       }, 50);
       return () => clearTimeout(timer);
     }
   }, [open, tempMonthIndex, tempYear]);
+
+  // Handle infinite scroll repositioning
+  const handleMonthScroll = () => {
+    const scrollContainer = monthScrollRef.current;
+    if (!scrollContainer || isRepositioning.current) return;
+
+    const scrollTop = scrollContainer.scrollTop;
+    const singleCycleHeight = 12 * ITEM_HEIGHT;
+    
+    // If scrolled too far up (into first cycle), jump to middle cycle
+    if (scrollTop < singleCycleHeight * 0.5) {
+      isRepositioning.current = true;
+      scrollContainer.scrollTop = scrollTop + singleCycleHeight;
+      requestAnimationFrame(() => {
+        isRepositioning.current = false;
+      });
+    }
+    // If scrolled too far down (into last cycle), jump to middle cycle
+    else if (scrollTop > singleCycleHeight * 1.5) {
+      isRepositioning.current = true;
+      scrollContainer.scrollTop = scrollTop - singleCycleHeight;
+      requestAnimationFrame(() => {
+        isRepositioning.current = false;
+      });
+    }
+  };
 
   const handleConfirm = () => {
     onSelect(tempYear, tempMonthIndex);
@@ -503,12 +591,12 @@ function MonthYearPicker({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div 
         className="absolute inset-0 bg-black/50" 
         onClick={() => onOpenChange(false)} 
       />
-      <div className="relative w-full max-w-sm rounded-t-2xl bg-white p-4 shadow-xl dark:bg-zinc-900 sm:rounded-2xl">
+      <div className="relative w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl dark:bg-zinc-900">
         <div className="mb-4 flex items-center justify-between">
           <button
             onClick={() => onOpenChange(false)}
@@ -528,38 +616,42 @@ function MonthYearPicker({
         </div>
 
         <div className="flex gap-2">
-          {/* Month picker wheel */}
+          {/* Month picker wheel - infinite cycling */}
           <div className="relative flex-1">
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-linear-to-b from-white to-transparent dark:from-zinc-900" />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-linear-to-t from-white to-transparent dark:from-zinc-900" />
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-10 -translate-y-1/2 rounded-lg border border-zinc-200 bg-zinc-100/50 dark:border-zinc-700 dark:bg-zinc-800/50" />
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-10 -translate-y-1/2 rounded-lg border-2 border-blue-500/30 bg-blue-50/50 dark:border-blue-400/30 dark:bg-blue-900/20" />
             
-            <ScrollArea className="h-44">
-              <div ref={monthListRef} className="py-[68px]">
-                {MONTH_NAMES.map((month, idx) => (
+            <div 
+              ref={monthScrollRef}
+              className="h-44 overflow-y-auto scrollbar-hide"
+              onScroll={handleMonthScroll}
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              <div className="py-[68px]">
+                {repeatedMonths.map((month) => (
                   <button
-                    key={month}
-                    data-month={idx}
-                    onClick={() => setTempMonthIndex(idx)}
+                    key={month.uniqueKey}
+                    onClick={() => setTempMonthIndex(month.index)}
                     className={cn(
                       "flex h-10 w-full items-center justify-center text-sm transition-all",
-                      tempMonthIndex === idx
-                        ? "font-semibold text-zinc-900 dark:text-zinc-50"
-                        : "text-zinc-400 dark:text-zinc-500"
+                      tempMonthIndex === month.index
+                        ? "font-bold text-blue-600 dark:text-blue-400 scale-105"
+                        : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"
                     )}
                   >
-                    {month}
+                    {month.name}
                   </button>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           </div>
 
           {/* Year picker wheel */}
           <div className="relative w-24">
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-linear-to-b from-white to-transparent dark:from-zinc-900" />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-linear-to-t from-white to-transparent dark:from-zinc-900" />
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-10 -translate-y-1/2 rounded-lg border border-zinc-200 bg-zinc-100/50 dark:border-zinc-700 dark:bg-zinc-800/50" />
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-10 -translate-y-1/2 rounded-lg border-2 border-blue-500/30 bg-blue-50/50 dark:border-blue-400/30 dark:bg-blue-900/20" />
             
             <ScrollArea className="h-44">
               <div ref={yearListRef} className="py-[68px]">
@@ -571,8 +663,8 @@ function MonthYearPicker({
                     className={cn(
                       "flex h-10 w-full items-center justify-center text-sm transition-all",
                       tempYear === y
-                        ? "font-semibold text-zinc-900 dark:text-zinc-50"
-                        : "text-zinc-400 dark:text-zinc-500"
+                        ? "font-bold text-blue-600 dark:text-blue-400 scale-105"
+                        : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"
                     )}
                   >
                     {y}
@@ -635,16 +727,16 @@ function BalanceCard({
 
   return (
     <Card className="bg-white dark:bg-zinc-900">
-      <CardContent className="space-y-3 p-4">
-        {/* Starting Balance */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex-1">
-            <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Starting Balance
+      <CardContent className="p-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {/* Starting Balance */}
+          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Starting
             </p>
             {isEditingStarting ? (
-              <div className="mt-1 flex items-center gap-2">
-                <span className="text-lg text-zinc-500">$</span>
+              <div className="mt-1 flex items-center gap-1">
+                <span className="text-sm text-zinc-500">$</span>
                 <Input
                   autoFocus
                   inputMode="decimal"
@@ -654,64 +746,64 @@ function BalanceCard({
                     if (e.key === "Enter") saveEdit();
                     if (e.key === "Escape") cancelEdit();
                   }}
-                  className="h-9 w-32 text-lg font-semibold"
+                  className="h-7 w-20 text-sm font-semibold"
                 />
                 <button
                   onClick={saveEdit}
-                  className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                  className="rounded p-0.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
                   aria-label="Save"
                 >
-                  <Check className="h-4 w-4" />
+                  <Check className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={cancelEdit}
-                  className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="rounded p-0.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                   aria-label="Cancel"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <p className={cn("text-lg font-semibold", startingColor)}>
+              <div className="flex items-center gap-1">
+                <p className={cn("text-base font-semibold", startingColor)}>
                   {formatCurrency(startingBalance, currency)}
                 </p>
                 <button
                   onClick={startEdit}
-                  className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                  className="rounded p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
                   aria-label="Edit starting balance"
                 >
-                  <Pencil className="h-3.5 w-3.5" />
+                  <Pencil className="h-3 w-3" />
                 </button>
               </div>
             )}
           </div>
-        </div>
 
-        {/* Running Balance */}
-        <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-          <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Running Balance
-          </p>
-          <p className={cn("text-2xl font-bold", currentColor)}>
-            {formatCurrency(current, currency)}
-          </p>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            After paid items
-          </p>
-        </div>
+          {/* Running Balance - Primary/highlighted */}
+          <div className="rounded-lg bg-blue-50 p-3 ring-1 ring-blue-100 dark:bg-blue-900/20 dark:ring-blue-800/50">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              Running
+            </p>
+            <p className={cn("text-base font-semibold", currentColor)}>
+              {formatCurrency(current, currency)}
+            </p>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+              Paid items
+            </p>
+          </div>
 
-        {/* Projected Balance */}
-        <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-          <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Projected Balance
-          </p>
-          <p className={cn("text-lg font-semibold", projectedColor)}>
-            {formatCurrency(projected, currency)}
-          </p>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            After all items
-          </p>
+          {/* Projected Balance */}
+          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Projected
+            </p>
+            <p className={cn("text-base font-semibold", projectedColor)}>
+              {formatCurrency(projected, currency)}
+            </p>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+              All items
+            </p>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -722,6 +814,7 @@ function TransactionRow({
   transaction,
   projectedBalance,
   currency,
+  isDragging,
   onTogglePaid,
   onEdit,
   onDelete,
@@ -729,13 +822,15 @@ function TransactionRow({
   transaction: Transaction;
   projectedBalance: number;
   currency: string;
+  isDragging?: boolean;
   onTogglePaid: (checked: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging } = useSortable({
     id: transaction._id,
   });
+  
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -752,10 +847,13 @@ function TransactionRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+      className={cn(
+        "flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-all duration-200",
+        (isDragging || isSortableDragging) && "opacity-40 scale-[0.98]"
+      )}
     >
       <button
-        className="flex h-10 w-6 items-center justify-center text-zinc-400"
+        className="flex h-10 w-6 items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-grab active:cursor-grabbing touch-none"
         {...attributes}
         {...listeners}
       >
@@ -810,6 +908,86 @@ function TransactionRow({
               onClick={onDelete}
               className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30"
               aria-label="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransactionRowOverlay({
+  transaction,
+  projectedBalance,
+  currency,
+}: {
+  transaction: Transaction;
+  projectedBalance: number;
+  currency: string;
+}) {
+  const color =
+    transaction.type === "income"
+      ? "text-emerald-600"
+      : transaction.type === "saving"
+        ? "text-sky-600"
+        : "text-rose-600";
+
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border-2 border-blue-400 bg-white p-3 shadow-xl dark:border-blue-500 dark:bg-zinc-900 ring-4 ring-blue-100 dark:ring-blue-900/50">
+      <div className="flex h-10 w-6 items-center justify-center text-blue-500">
+        <GripVertical className="h-4 w-4" />
+      </div>
+      <div className="flex flex-1 flex-col gap-0.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              {transaction.label}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Due: {transaction.date}</p>
+          </div>
+          <div className="text-right">
+            <p className={cn("text-sm font-semibold", color)}>
+              {formatCurrency(transaction.amountCents, currency)}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              After: {formatCurrency(projectedBalance ?? 0, currency)}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={transaction.isPaid}
+              disabled
+              aria-label="Mark as paid"
+            />
+            <Badge className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+              {transaction.type === "income"
+                ? "Income"
+                : transaction.type === "saving"
+                  ? "Saving"
+                  : "Bill"}
+            </Badge>
+            {transaction.isRecurring && (
+              <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                Recurring
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              className="rounded-lg p-1 text-zinc-500"
+              aria-label="Edit"
+              disabled
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              className="rounded-lg p-1 text-rose-500"
+              aria-label="Delete"
+              disabled
             >
               <Trash2 className="h-4 w-4" />
             </button>
