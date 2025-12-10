@@ -1,4 +1,4 @@
-# Cash Flow Forecaster
+# SIMPLE BUDGET
 
 Mobile-first cash flow planner built with Next.js 16, Tailwind v4, Shadcn-inspired UI, Convex (schema + functions), and @dnd-kit for ordering.
 

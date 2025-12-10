@@ -24,8 +24,6 @@ import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
-  SheetTitle,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +33,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   GripVertical,
   LogOut,
   Moon,
@@ -85,6 +84,7 @@ export default function Home() {
   const { user, isLoading: isAuthLoading, signIn, signUp, signOut } = useAuth();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
 
   // Start with current month
   const now = new Date();
@@ -117,6 +117,7 @@ export default function Home() {
   const deleteTx = useMutation(api.transactions.remove);
   const reorderTx = useMutation(api.transactions.reorder);
   const togglePaid = useMutation(api.transactions.togglePaid);
+  const copyFromMonth = useMutation(api.transactions.copyFromMonth);
 
   const balances = useMemo(() => {
     if (!transactions || !currentMonth) {
@@ -218,6 +219,28 @@ export default function Home() {
         },
       });
     } else {
+      // Calculate order for new savings - place directly below linked income
+      let order = input.order;
+      if (input.type === "saving" && input.linkedIncomeId && transactions) {
+        const linkedIncome = transactions.find((t) => t._id === input.linkedIncomeId);
+        if (linkedIncome) {
+          // Find all transactions after the linked income
+          const incomeOrder = linkedIncome.order;
+          // Insert right after the linked income by using a fractional order
+          // Find the next item after the income
+          const sortedTxs = [...transactions].sort((a, b) => a.order - b.order);
+          const incomeIdx = sortedTxs.findIndex((t) => t._id === input.linkedIncomeId);
+          if (incomeIdx !== -1 && incomeIdx < sortedTxs.length - 1) {
+            // Place between income and next item
+            const nextOrder = sortedTxs[incomeIdx + 1].order;
+            order = (incomeOrder + nextOrder) / 2;
+          } else {
+            // Place after income
+            order = incomeOrder + 1;
+          }
+        }
+      }
+      
       await createTx({
         token: user.token,
         monthId,
@@ -225,7 +248,7 @@ export default function Home() {
         type: input.type,
         amountCents: input.amountCents,
         date: input.date,
-        order: input.order,
+        order,
         category: input.category || undefined,
         isRecurring: input.isRecurring,
         isTemplateOnly: input.isTemplateOnly,
@@ -286,6 +309,32 @@ export default function Home() {
     setSelectedMonthIndex(monthIndex);
   };
 
+  const handleCopyFromMonth = async (
+    sourceMonthId: Id<"months">,
+    includeDays: boolean,
+    includeAmounts: boolean
+  ) => {
+    if (!user) return;
+    await copyFromMonth({
+      token: user.token,
+      sourceMonthId,
+      targetYear: selectedYear,
+      targetMonthIndex: selectedMonthIndex,
+      includeDays,
+      includeAmounts,
+    });
+    setCopyModalOpen(false);
+  };
+
+  // Determine if we should show the copy button (empty month)
+  const showCopyButton =
+    !currentMonth || (transactions && transactions.length === 0);
+
+  // Filter months for copy modal (exclude current selection)
+  const availableMonthsToCopy = months?.filter(
+    (m) => !(m.year === selectedYear && m.monthIndex === selectedMonthIndex)
+  );
+
   if (isAuthLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-6">
@@ -301,18 +350,20 @@ export default function Home() {
   const monthExists = currentMonth !== null;
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-20 text-zinc-900 dark:text-zinc-50">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
-        <Header
-          year={selectedYear}
-          monthIndex={selectedMonthIndex}
-          onPrevMonth={handlePrevMonth}
-          onNextMonth={handleNextMonth}
-          onSelectMonth={handleSelectMonth}
-          onSignOut={signOut}
-        />
+    <main className="fixed inset-0 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
+      <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-4 py-6 overflow-hidden">
+        <div className="shrink-0">
+          <Header
+            year={selectedYear}
+            monthIndex={selectedMonthIndex}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+            onSelectMonth={handleSelectMonth}
+            onSignOut={signOut}
+          />
+        </div>
 
-        <>
+        <div className="shrink-0">
           <BalanceCard
             startingBalance={currentMonth?.startingBalanceCents ?? 0}
             current={balances.currentBankBalanceCents}
@@ -320,23 +371,33 @@ export default function Home() {
             currency={currentMonth?.currency ?? "USD"}
             onUpdateStartingBalance={handleUpdateStartingBalance}
           />
+        </div>
 
-          <div className="flex gap-2">
+        <div className="flex flex-col gap-2 shrink-0">
+          {showCopyButton && availableMonthsToCopy && availableMonthsToCopy.length > 0 && (
             <Button
-              onClick={() => {
-                setEditing(null);
-                setAddOpen(true);
-              }}
-              className="flex-1"
+              variant="outline"
+              onClick={() => setCopyModalOpen(true)}
+              className="w-full"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              Add item
+              <Copy className="mr-2 h-4 w-4" />
+              Copy from Another Month
             </Button>
-          </div>
+          )}
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setAddOpen(true);
+            }}
+            className="flex-1"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add item
+          </Button>
+        </div>
 
-          <Card className="border-none bg-transparent shadow-none">
-            <CardContent className="p-0">
-              <ScrollArea className="max-h-[70vh]">
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="h-full overflow-y-auto pb-4 custom-scrollbar">
                 {monthExists && displayTransactions ? (
                   <DndContext 
                     sensors={sensors} 
@@ -400,10 +461,8 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </>
+          </div>
+        </div>
       </div>
 
       <TransactionFormSheet
@@ -415,6 +474,15 @@ export default function Home() {
         transaction={editing}
         incomes={(transactions ?? []).filter((t) => t.type === "income")}
         nextOrder={(transactions ?? []).length}
+        selectedYear={selectedYear}
+        selectedMonthIndex={selectedMonthIndex}
+      />
+
+      <CopyFromMonthModal
+        open={copyModalOpen}
+        onOpenChange={setCopyModalOpen}
+        availableMonths={availableMonthsToCopy ?? []}
+        onCopy={handleCopyFromMonth}
       />
     </main>
   );
@@ -437,30 +505,47 @@ function Header({
 }) {
   const { theme, toggleTheme } = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const monthButtonRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center">
-        <button
-          onClick={onPrevMonth}
-          className="rounded-lg pr-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          aria-label="Previous month"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <button
-          onClick={() => setPickerOpen(true)}
-          className="min-w-[120px] rounded-xl border border-zinc-300 bg-white px-2 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
-        >
-          {monthLabel(year, monthIndex)}
-        </button>
-        <button
-          onClick={onNextMonth}
-          className="rounded-lg pl-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          aria-label="Next month"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
+      <div className="flex items-center gap-3">
+        <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400 tracking-tight">
+          SIMPLE BUDGET
+        </h1>
+        <div className="h-6 w-px bg-zinc-300 dark:bg-zinc-700" />
+        <div className="relative flex items-center">
+          <button
+            onClick={onPrevMonth}
+            className="rounded-lg pr-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            ref={monthButtonRef}
+            onClick={() => setPickerOpen(!pickerOpen)}
+            className="min-w-[120px] rounded-xl border border-zinc-300 bg-white px-2 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+          >
+            {monthLabel(year, monthIndex)}
+          </button>
+          <button
+            onClick={onNextMonth}
+            className="rounded-lg pl-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            aria-label="Next month"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+
+          <MonthYearPicker
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            year={year}
+            monthIndex={monthIndex}
+            onSelect={onSelectMonth}
+            anchorRef={monthButtonRef}
+          />
+        </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <Button 
@@ -480,14 +565,6 @@ function Header({
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
-
-      <MonthYearPicker
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        year={year}
-        monthIndex={monthIndex}
-        onSelect={onSelectMonth}
-      />
     </div>
   );
 }
@@ -498,181 +575,222 @@ function MonthYearPicker({
   year,
   monthIndex,
   onSelect,
+  anchorRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   year: number;
   monthIndex: number;
   onSelect: (year: number, monthIndex: number) => void;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const [tempYear, setTempYear] = useState(year);
-  const [tempMonthIndex, setTempMonthIndex] = useState(monthIndex);
-  const [wasOpen, setWasOpen] = useState(false);
-  
-  const monthScrollRef = useRef<HTMLDivElement>(null);
-  const yearListRef = useRef<HTMLDivElement>(null);
-  const isRepositioning = useRef(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Generate years (10 years back, 10 years forward)
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+  // Generate years from 2000 to 2050
+  const years = Array.from({ length: 51 }, (_, i) => 2000 + i);
 
-  // Create repeating months for infinite scroll effect (3 full cycles for smoother looping)
-  const REPEAT_COUNT = 3;
-  const MIDDLE_CYCLE = 1;
-  const ITEM_HEIGHT = 40; // h-10 = 40px
-  const VIEWPORT_HEIGHT = 176; // h-44 = 176px
-  
-  const repeatedMonths = Array.from({ length: MONTH_NAMES.length * REPEAT_COUNT }, (_, i) => ({
-    index: i % 12,
-    name: MONTH_NAMES[i % 12],
-    cycle: Math.floor(i / 12),
-    uniqueKey: i,
-  }));
-
-  // Reset temp values when opening (using derived state pattern)
-  if (open && !wasOpen) {
-    setWasOpen(true);
-    setTempYear(year);
-    setTempMonthIndex(monthIndex);
-  } else if (!open && wasOpen) {
-    setWasOpen(false);
-  }
-
-  // Scroll to the middle cycle on initial open
+  // Reset temp year when opening
   useEffect(() => {
     if (open) {
-      const timer = setTimeout(() => {
-        const scrollContainer = monthScrollRef.current;
-        if (scrollContainer) {
-          // Calculate scroll position to center the selected month in middle cycle
-          const targetIndex = MIDDLE_CYCLE * 12 + tempMonthIndex;
-          const scrollTop = targetIndex * ITEM_HEIGHT - (VIEWPORT_HEIGHT / 2) + (ITEM_HEIGHT / 2);
-          scrollContainer.scrollTop = scrollTop;
-        }
-        const yearItem = yearListRef.current?.querySelector(`[data-year="${tempYear}"]`);
-        yearItem?.scrollIntoView({ block: "center", behavior: "instant" });
-      }, 50);
-      return () => clearTimeout(timer);
+      setTempYear(year);
     }
-  }, [open, tempMonthIndex, tempYear]);
+  }, [open, year]);
 
-  // Handle infinite scroll repositioning
-  const handleMonthScroll = () => {
-    const scrollContainer = monthScrollRef.current;
-    if (!scrollContainer || isRepositioning.current) return;
-
-    const scrollTop = scrollContainer.scrollTop;
-    const singleCycleHeight = 12 * ITEM_HEIGHT;
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
     
-    // If scrolled too far up (into first cycle), jump to middle cycle
-    if (scrollTop < singleCycleHeight * 0.5) {
-      isRepositioning.current = true;
-      scrollContainer.scrollTop = scrollTop + singleCycleHeight;
-      requestAnimationFrame(() => {
-        isRepositioning.current = false;
-      });
-    }
-    // If scrolled too far down (into last cycle), jump to middle cycle
-    else if (scrollTop > singleCycleHeight * 1.5) {
-      isRepositioning.current = true;
-      scrollContainer.scrollTop = scrollTop - singleCycleHeight;
-      requestAnimationFrame(() => {
-        isRepositioning.current = false;
-      });
-    }
-  };
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(e.target as Node) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(e.target as Node)
+      ) {
+        onOpenChange(false);
+      }
+    };
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open, onOpenChange, anchorRef]);
 
-  const handleConfirm = () => {
-    onSelect(tempYear, tempMonthIndex);
+  const handleMonthSelect = (monthIdx: number) => {
+    onSelect(tempYear, monthIdx);
     onOpenChange(false);
   };
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div 
-        className="absolute inset-0 bg-black/50" 
-        onClick={() => onOpenChange(false)} 
+    <div 
+      ref={dropdownRef}
+      className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+    >
+      {/* Year selector */}
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          onClick={() => setTempYear(tempYear - 1)}
+          className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <select
+          value={tempYear}
+          onChange={(e) => setTempYear(Number(e.target.value))}
+          className="rounded-lg border-none bg-transparent px-2 py-1 text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-zinc-50"
+        >
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => setTempYear(tempYear + 1)}
+          className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Month grid */}
+      <div className="grid grid-cols-3 gap-1">
+        {MONTH_NAMES.map((name, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleMonthSelect(idx)}
+            className={cn(
+              "rounded-lg px-2 py-2 text-sm transition-colors",
+              idx === monthIndex && tempYear === year
+                ? "bg-blue-600 font-semibold text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            )}
+          >
+            {name.slice(0, 3)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CopyFromMonthModal({
+  open,
+  onOpenChange,
+  availableMonths,
+  onCopy,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  availableMonths: Month[];
+  onCopy: (
+    sourceMonthId: Id<"months">,
+    includeDays: boolean,
+    includeAmounts: boolean
+  ) => Promise<void>;
+}) {
+  const [selectedMonthId, setSelectedMonthId] = useState<Id<"months"> | "">("");
+  const [includeDays, setIncludeDays] = useState(false);
+  const [includeAmounts, setIncludeAmounts] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (open) {
+      setSelectedMonthId("");
+      setIncludeDays(false);
+      setIncludeAmounts(false);
+      setIsSubmitting(false);
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    if (!selectedMonthId) return;
+    setIsSubmitting(true);
+    try {
+      await onCopy(selectedMonthId, includeDays, includeAmounts);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => onOpenChange(false)}
       />
-      <div className="relative w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl dark:bg-zinc-900">
-        <div className="mb-4 flex items-center justify-between">
-          <button
-            onClick={() => onOpenChange(false)}
-            className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-          >
-            Cancel
-          </button>
-          <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            Select Month
-          </span>
-          <button
-            onClick={handleConfirm}
-            className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            Done
-          </button>
+
+      {/* Modal */}
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="space-y-4">
+          {/* Month selector */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+              Select month to copy from
+            </label>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              value={selectedMonthId}
+              onChange={(e) => setSelectedMonthId(e.target.value as Id<"months">)}
+            >
+              <option value="">Select a month...</option>
+              {availableMonths.map((month) => (
+                <option key={month._id} value={month._id}>
+                  {month.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Checkboxes */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+              <Checkbox
+                checked={includeDays}
+                onCheckedChange={(v) => setIncludeDays(Boolean(v))}
+              />
+              Include days
+            </label>
+            <p className="ml-6 text-xs text-zinc-500 dark:text-zinc-400">
+              Copy the day of month for each item (otherwise left blank)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+              <Checkbox
+                checked={includeAmounts}
+                onCheckedChange={(v) => setIncludeAmounts(Boolean(v))}
+              />
+              Include amounts
+            </label>
+            <p className="ml-6 text-xs text-zinc-500 dark:text-zinc-400">
+              Copy the amounts for each item (otherwise defaults to $0)
+            </p>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          {/* Month picker wheel - infinite cycling */}
-          <div className="relative flex-1">
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-linear-to-b from-white to-transparent dark:from-zinc-900" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-linear-to-t from-white to-transparent dark:from-zinc-900" />
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-10 -translate-y-1/2 rounded-lg border-2 border-blue-500/30 bg-blue-50/50 dark:border-blue-400/30 dark:bg-blue-900/20" />
-            
-            <div 
-              ref={monthScrollRef}
-              className="h-44 overflow-y-auto scrollbar-hide"
-              onScroll={handleMonthScroll}
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              <div className="py-[68px]">
-                {repeatedMonths.map((month) => (
-                  <button
-                    key={month.uniqueKey}
-                    onClick={() => setTempMonthIndex(month.index)}
-                    className={cn(
-                      "flex h-10 w-full items-center justify-center text-sm transition-all",
-                      tempMonthIndex === month.index
-                        ? "font-bold text-blue-600 dark:text-blue-400 scale-105"
-                        : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"
-                    )}
-                  >
-                    {month.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Year picker wheel */}
-          <div className="relative w-24">
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-linear-to-b from-white to-transparent dark:from-zinc-900" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-linear-to-t from-white to-transparent dark:from-zinc-900" />
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-10 -translate-y-1/2 rounded-lg border-2 border-blue-500/30 bg-blue-50/50 dark:border-blue-400/30 dark:bg-blue-900/20" />
-            
-            <ScrollArea className="h-44">
-              <div ref={yearListRef} className="py-[68px]">
-                {years.map((y) => (
-                  <button
-                    key={y}
-                    data-year={y}
-                    onClick={() => setTempYear(y)}
-                    className={cn(
-                      "flex h-10 w-full items-center justify-center text-sm transition-all",
-                      tempYear === y
-                        ? "font-bold text-blue-600 dark:text-blue-400 scale-105"
-                        : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"
-                    )}
-                  >
-                    {y}
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
+        {/* Actions */}
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!selectedMonthId || isSubmitting}
+          >
+            {isSubmitting ? "Copying..." : "Copy"}
+          </Button>
         </div>
       </div>
     </div>
@@ -836,12 +954,23 @@ function TransactionRow({
     transition,
   };
 
-  const color =
+  const amountColor =
     transaction.type === "income"
       ? "text-emerald-600"
       : transaction.type === "saving"
         ? "text-sky-600"
         : "text-rose-600";
+
+  // Badge colors for type
+  const badgeStyles = {
+    income: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+    bill: "bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+    saving: "bg-sky-50 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  };
+
+  // Format date as ordinal
+  const dayNumber = parseInt(transaction.date, 10);
+  const formattedDate = !isNaN(dayNumber) ? formatOrdinal(dayNumber) : transaction.date;
 
   return (
     <div
@@ -865,10 +994,10 @@ function TransactionRow({
             <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               {transaction.label}
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Due: {transaction.date}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Due: {formattedDate}</p>
           </div>
           <div className="text-right">
-            <p className={cn("text-sm font-semibold", color)}>
+            <p className={cn("text-sm font-semibold", amountColor)}>
               {formatCurrency(transaction.amountCents, currency)}
             </p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -878,12 +1007,7 @@ function TransactionRow({
         </div>
         <div className="flex items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2">
-            <Checkbox
-              checked={transaction.isPaid}
-              onCheckedChange={(v) => onTogglePaid(Boolean(v))}
-              aria-label="Mark as paid"
-            />
-            <Badge className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+            <Badge className={badgeStyles[transaction.type]}>
               {transaction.type === "income"
                 ? "Income"
                 : transaction.type === "saving"
@@ -896,7 +1020,25 @@ function TransactionRow({
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onTogglePaid(!transaction.isPaid)}
+              className={cn(
+                "rounded-lg px-2 py-1 text-xs font-medium transition-colors",
+                transaction.isPaid
+                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-900/70"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+              )}
+            >
+              {transaction.isPaid ? (
+                <span className="flex items-center gap-1">
+                  <Check className="h-3 w-3" />
+                  Paid
+                </span>
+              ) : (
+                "Mark Paid"
+              )}
+            </button>
             <button
               onClick={onEdit}
               className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -927,12 +1069,23 @@ function TransactionRowOverlay({
   projectedBalance: number;
   currency: string;
 }) {
-  const color =
+  const amountColor =
     transaction.type === "income"
       ? "text-emerald-600"
       : transaction.type === "saving"
         ? "text-sky-600"
         : "text-rose-600";
+
+  // Badge colors for type
+  const badgeStyles = {
+    income: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+    bill: "bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+    saving: "bg-sky-50 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  };
+
+  // Format date as ordinal
+  const dayNumber = parseInt(transaction.date, 10);
+  const formattedDate = !isNaN(dayNumber) ? formatOrdinal(dayNumber) : transaction.date;
 
   return (
     <div className="flex items-center gap-3 rounded-2xl border-2 border-blue-400 bg-white p-3 shadow-xl dark:border-blue-500 dark:bg-zinc-900 ring-4 ring-blue-100 dark:ring-blue-900/50">
@@ -945,10 +1098,10 @@ function TransactionRowOverlay({
             <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               {transaction.label}
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Due: {transaction.date}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Due: {formattedDate}</p>
           </div>
           <div className="text-right">
-            <p className={cn("text-sm font-semibold", color)}>
+            <p className={cn("text-sm font-semibold", amountColor)}>
               {formatCurrency(transaction.amountCents, currency)}
             </p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -958,12 +1111,7 @@ function TransactionRowOverlay({
         </div>
         <div className="flex items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2">
-            <Checkbox
-              checked={transaction.isPaid}
-              disabled
-              aria-label="Mark as paid"
-            />
-            <Badge className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+            <Badge className={badgeStyles[transaction.type]}>
               {transaction.type === "income"
                 ? "Income"
                 : transaction.type === "saving"
@@ -976,7 +1124,24 @@ function TransactionRowOverlay({
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "rounded-lg px-2 py-1 text-xs font-medium",
+                transaction.isPaid
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+              )}
+            >
+              {transaction.isPaid ? (
+                <span className="flex items-center gap-1">
+                  <Check className="h-3 w-3" />
+                  Paid
+                </span>
+              ) : (
+                "Mark Paid"
+              )}
+            </span>
             <button
               className="rounded-lg p-1 text-zinc-500"
               aria-label="Edit"
@@ -1012,6 +1177,18 @@ type TransactionFormValues = {
   linkedIncomeId?: string;
 };
 
+// Helper to get the number of days in a month
+function getDaysInMonth(year: number, monthIndex: number): number {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+// Helper to format day as ordinal (1st, 2nd, 3rd, etc.)
+function formatOrdinal(day: number): string {
+  const suffixes = ["th", "st", "nd", "rd"];
+  const v = day % 100;
+  return day + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+}
+
 function TransactionFormSheet({
   open,
   onOpenChange,
@@ -1020,6 +1197,8 @@ function TransactionFormSheet({
   transaction,
   incomes,
   nextOrder,
+  selectedYear,
+  selectedMonthIndex,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -1028,6 +1207,8 @@ function TransactionFormSheet({
   transaction: Transaction | null;
   incomes: Transaction[];
   nextOrder: number;
+  selectedYear: number;
+  selectedMonthIndex: number;
 }) {
   const [form, setForm] = useState<TransactionFormValues>(() =>
     transaction
@@ -1051,13 +1232,49 @@ function TransactionFormSheet({
           date: "",
           order: nextOrder,
           isRecurring: false,
-          isTemplateOnly: false,
+          isTemplateOnly: false, // Keep for API compatibility
           category: "",
           mode: "fixed",
           savingsPercentage: 0,
           linkedIncomeId: undefined,
         },
   );
+
+  // Amount display value for controlled input (allows typing decimals like "25.")
+  const [amountDisplay, setAmountDisplay] = useState(() => 
+    form.amountCents === 0 ? "" : (form.amountCents / 100).toString()
+  );
+
+  const maxDays = getDaysInMonth(selectedYear, selectedMonthIndex);
+  const [dateError, setDateError] = useState<string | null>(null);
+
+  const handleDateChange = (value: string) => {
+    // Only allow numbers
+    const cleaned = value.replace(/[^0-9]/g, "");
+    const day = parseInt(cleaned, 10);
+    
+    if (cleaned === "") {
+      setForm((f) => ({ ...f, date: "" }));
+      setDateError(null);
+      return;
+    }
+    
+    if (day < 1 || day > maxDays) {
+      setDateError(`Day must be between 1 and ${maxDays}`);
+    } else {
+      setDateError(null);
+    }
+    
+    setForm((f) => ({ ...f, date: cleaned }));
+  };
+
+  const handleAmountChange = (value: string) => {
+    // Allow empty, numbers, and one decimal point with up to 2 decimal places
+    if (value === "" || /^\d*\.?\d{0,2}$/.test(value)) {
+      setAmountDisplay(value);
+      setForm((f) => ({ ...f, amountCents: toCents(value) }));
+    }
+  };
 
   const isSaving = form.type === "saving";
   const computedAmount =
@@ -1068,16 +1285,21 @@ function TransactionFormSheet({
         )
       : form.amountCents;
 
+  // Check if form is valid
+  const isValid = form.label.trim() !== "" && 
+    form.date !== "" && 
+    !dateError && 
+    parseInt(form.date, 10) >= 1 && 
+    parseInt(form.date, 10) <= maxDays;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent title={transaction ? "Edit item" : "Add item"}>
-        <SheetHeader>
-          <SheetTitle>{transaction ? "Edit item" : "Add new item"}</SheetTitle>
-        </SheetHeader>
+      <SheetContent title={transaction ? "Edit Item" : "Add Item"}>
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
+            if (!isValid) return;
             onSubmit({
               ...form,
               amountCents: computedAmount,
@@ -1117,14 +1339,19 @@ function TransactionFormSheet({
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                Date (e.g. 15 or 2025-12-15)
+                Date
               </label>
               <Input
+                inputMode="numeric"
                 value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                placeholder="15"
+                onChange={(e) => handleDateChange(e.target.value)}
+                placeholder={`1-${maxDays}`}
                 required
+                className={dateError ? "border-rose-500 focus:border-rose-500 focus:ring-rose-100" : ""}
               />
+              {dateError && (
+                <p className="text-xs text-rose-500">{dateError}</p>
+              )}
             </div>
           </div>
 
@@ -1133,14 +1360,17 @@ function TransactionFormSheet({
               <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
                 Amount
               </label>
-              <Input
-                inputMode="decimal"
-                value={(form.amountCents / 100).toString()}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, amountCents: toCents(e.target.value) }))
-                }
-                required
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                <Input
+                  inputMode="decimal"
+                  value={amountDisplay}
+                  onChange={(e) => handleAmountChange(e.target.value)}
+                  placeholder="0.00"
+                  className="pl-7"
+                  required
+                />
+              </div>
             </div>
           )}
 
@@ -1195,7 +1425,7 @@ function TransactionFormSheet({
                       <option value="">Select income</option>
                       {incomes.map((income) => (
                         <option key={income._id} value={income._id}>
-                          {income.label} ({formatCurrency(income.amountCents)})
+                          {income.label} ({formatCurrency(income.amountCents)}) - {formatOrdinal(parseInt(income.date, 10) || 0)}
                         </option>
                       ))}
                     </select>
@@ -1209,19 +1439,23 @@ function TransactionFormSheet({
                   <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
                     Amount
                   </label>
-                  <Input
-                    inputMode="decimal"
-                    value={(form.amountCents / 100).toString()}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, amountCents: toCents(e.target.value) }))
-                    }
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                    <Input
+                      inputMode="decimal"
+                      value={amountDisplay}
+                      onChange={(e) => handleAmountChange(e.target.value)}
+                      placeholder="0.00"
+                      className="pl-7"
+                    />
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
+          {/* TODO: Recurring checkbox - temporarily hidden from UI but functionality remains in form state */}
+          {/* <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
               <Checkbox
                 checked={form.isRecurring}
@@ -1229,18 +1463,9 @@ function TransactionFormSheet({
                   setForm((f) => ({ ...f, isRecurring: Boolean(v) }))
                 }
               />
-              Recurring each month
+              Recurring
             </label>
-            <label className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
-              <Checkbox
-                checked={form.isTemplateOnly}
-                onCheckedChange={(v) =>
-                  setForm((f) => ({ ...f, isTemplateOnly: Boolean(v) }))
-                }
-              />
-              Copy as template
-            </label>
-          </div>
+          </div> */}
 
           <div className="flex items-center justify-between gap-2 pt-2">
             {onDelete && (
@@ -1253,7 +1478,7 @@ function TransactionFormSheet({
                 Delete
               </Button>
             )}
-            <Button type="submit" className="ml-auto">
+            <Button type="submit" className="ml-auto" disabled={!isValid}>
               Save
             </Button>
           </div>
@@ -1296,11 +1521,13 @@ function AuthScreen({
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
       <Card className="w-full max-w-md">
         <CardContent className="space-y-6 p-6">
-          <div className="space-y-2 text-center">
-            <p className="text-xs uppercase tracking-wide text-blue-600 dark:text-blue-400">Cash Flow Forecaster</p>
-            <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-              {mode === "signin" ? "Sign in" : "Create account"}
+          <div className="space-y-4 text-center">
+            <h1 className="text-4xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
+              SIMPLE BUDGET
             </h1>
+            <p className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
+              {mode === "signin" ? "Sign in" : "Create account"}
+            </p>
           </div>
           <form className="space-y-3" onSubmit={handleSubmit}>
             <div className="space-y-1">

@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cash Flow Forecaster",
-  description: "Mobile-first monthly cash flow planner with Convex backend",
+  title: "SIMPLE BUDGET",
+  description: "Simple Budget - Mobile-first cash flow planner with Convex backend",
 };
 
 export default function RootLayout({

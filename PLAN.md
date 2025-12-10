@@ -1,4 +1,4 @@
-# Project Plan: Cash Flow Forecaster (Budget Flow)
+# Project Plan: SIMPLE BUDGET (Budget Flow)
 Google sheet to reference: https://docs.google.com/spreadsheets/d/1oYBRGeiIkfiByzXgJt4ZB6CzpECGycW5OBiiGVOdnhA/edit?gid=28656034#gid=28656034
 
 ## 1. Project Overview
