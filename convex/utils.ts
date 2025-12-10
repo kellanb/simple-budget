@@ -1,4 +1,5 @@
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 type Ctx = MutationCtx | QueryCtx;
 
@@ -31,7 +32,7 @@ export async function requireSession(ctx: Ctx, token: string) {
   return { session, user };
 }
 
-export async function createSession(ctx: MutationCtx, userId: string) {
+export async function createSession(ctx: MutationCtx, userId: Id<"users">) {
   const token = crypto.randomUUID();
   const expiresAt = Date.now() + 1000 * 60 * 60 * 24 * 30; // 30 days
 

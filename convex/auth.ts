@@ -15,7 +15,7 @@ function toHex(bytes: ArrayBuffer) {
 function generateSalt(): string {
   const buf = new Uint8Array(16);
   crypto.getRandomValues(buf);
-  return toHex(buf);
+  return toHex(buf.buffer);
 }
 
 async function hashPassword(password: string, salt: string) {
