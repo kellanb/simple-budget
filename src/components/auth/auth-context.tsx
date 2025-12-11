@@ -67,11 +67,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    if (token) {
-      await signOutMutation({ token });
-    }
+    const currentToken = token;
+    // Clear token state FIRST to unsubscribe queries before backend deletion
     setToken(null);
     localStorage.removeItem(STORAGE_KEY);
+    // Then delete the session on the backend (queries are already unsubscribed)
+    if (currentToken) {
+      await signOutMutation({ token: currentToken }).catch(() => {
+        // Ignore errors - session might already be invalid
+      });
+    }
   };
 
   const value: AuthContextValue = {

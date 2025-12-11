@@ -29,13 +29,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
+  ArrowUp,
   CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
   GripVertical,
-  LogOut,
   Moon,
   Pencil,
   Plus,
@@ -43,6 +43,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { Navbar } from "@/components/ui/navbar";
 
 type Month = {
   _id: Id<"months">;
@@ -85,6 +86,7 @@ export default function Home() {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Start with current month
   const now = new Date();
@@ -138,6 +140,21 @@ export default function Home() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localTransactions, setLocalTransactions] = useState<Transaction[] | null>(null);
+  
+  // Track scroll position for scroll-to-top button
+  useEffect(() => {
+    const handleScroll = () => {
+      // Show button after scrolling 300px (roughly after 1-2 items)
+      setShowScrollTop(window.scrollY > 300);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   
   // Sync local transactions with server data
   useEffect(() => {
@@ -349,17 +366,24 @@ export default function Home() {
 
   const monthExists = currentMonth !== null;
 
+  const navItems = [
+    { label: "Monthly Forecast", href: "/", active: true },
+    { label: "Yearly Forecast", href: "/yearly", active: false },
+  ];
+
   return (
-    <main className="fixed inset-0 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
-      <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-4 py-6 overflow-hidden">
+    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 flex flex-col">
+      <div className="shrink-0 sticky top-0 z-40">
+        <Navbar items={navItems} onSignOut={signOut} />
+      </div>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4 pb-safe">
         <div className="shrink-0">
-          <Header
+          <ControlsBar
             year={selectedYear}
             monthIndex={selectedMonthIndex}
             onPrevMonth={handlePrevMonth}
             onNextMonth={handleNextMonth}
             onSelectMonth={handleSelectMonth}
-            onSignOut={signOut}
           />
         </div>
 
@@ -396,8 +420,7 @@ export default function Home() {
           </Button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <div className="h-full overflow-y-auto pb-4 custom-scrollbar">
+        <div className="pb-4">
                 {monthExists && displayTransactions ? (
                   <DndContext 
                     sensors={sensors} 
@@ -461,7 +484,6 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-          </div>
         </div>
       </div>
 
@@ -484,24 +506,33 @@ export default function Home() {
         availableMonths={availableMonthsToCopy ?? []}
         onCopy={handleCopyFromMonth}
       />
+
+      {/* Scroll to top button - mobile only */}
+      {showScrollTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-all hover:bg-blue-700 active:scale-95 md:hidden dark:bg-blue-500 dark:hover:bg-blue-600"
+          aria-label="Scroll to top"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </button>
+      )}
     </main>
   );
 }
 
-function Header({
+function ControlsBar({
   year,
   monthIndex,
   onPrevMonth,
   onNextMonth,
   onSelectMonth,
-  onSignOut,
 }: {
   year: number;
   monthIndex: number;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onSelectMonth: (year: number, monthIndex: number) => void;
-  onSignOut: () => Promise<void>;
 }) {
   const { theme, toggleTheme } = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -509,62 +540,54 @@ function Header({
 
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400 tracking-tight">
-          SIMPLE BUDGET
-        </h1>
-        <div className="h-6 w-px bg-zinc-300 dark:bg-zinc-700" />
-        <div className="relative flex items-center">
-          <button
-            onClick={onPrevMonth}
-            className="rounded-lg pr-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            aria-label="Previous month"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button
-            ref={monthButtonRef}
-            onClick={() => setPickerOpen(!pickerOpen)}
-            className="min-w-[120px] rounded-xl border border-zinc-300 bg-white px-2 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
-          >
-            {monthLabel(year, monthIndex)}
-          </button>
-          <button
-            onClick={onNextMonth}
-            className="rounded-lg pl-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            aria-label="Next month"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-
-          <MonthYearPicker
-            open={pickerOpen}
-            onOpenChange={setPickerOpen}
-            year={year}
-            monthIndex={monthIndex}
-            onSelect={onSelectMonth}
-            anchorRef={monthButtonRef}
-          />
-        </div>
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <Button 
-          variant="outline" 
-          size="icon" 
-          onClick={toggleTheme} 
-          title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-          className="h-8 w-8"
+      {/* Date picker on the left */}
+      <div className="relative flex items-center">
+        <button
+          onClick={onPrevMonth}
+          className="rounded-lg pr-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          aria-label="Previous month"
         >
-          {theme === "light" ? (
-            <Moon className="h-4 w-4" />
-          ) : (
-            <Sun className="h-4 w-4" />
-          )}
-        </Button>
-        <Button variant="outline" size="icon" onClick={onSignOut} title="Sign out" className="h-8 w-8">
-          <LogOut className="h-4 w-4" />
-        </Button>
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <button
+          ref={monthButtonRef}
+          onClick={() => setPickerOpen(!pickerOpen)}
+          className="min-w-[120px] rounded-xl border border-zinc-300 bg-white px-2 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+        >
+          {monthLabel(year, monthIndex)}
+        </button>
+        <button
+          onClick={onNextMonth}
+          className="rounded-lg pl-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          aria-label="Next month"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+
+        <MonthYearPicker
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          year={year}
+          monthIndex={monthIndex}
+          onSelect={onSelectMonth}
+          anchorRef={monthButtonRef}
+        />
       </div>
+
+      {/* Theme toggle on the right */}
+      <Button 
+        variant="outline" 
+        size="icon" 
+        onClick={toggleTheme} 
+        title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+        className="h-8 w-8"
+      >
+        {theme === "light" ? (
+          <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+      </Button>
     </div>
   );
 }
@@ -1495,6 +1518,7 @@ function AuthScreen({
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
 }) {
+  const { theme, toggleTheme } = useTheme();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -1519,15 +1543,29 @@ function AuthScreen({
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
+      {/* Theme toggle button - positioned at top right */}
+      <div className="fixed top-4 right-4">
+        <Button 
+          variant="outline" 
+          size="icon" 
+          onClick={toggleTheme} 
+          title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+          className="h-10 w-10"
+        >
+          {theme === "light" ? (
+            <Moon className="h-5 w-5" />
+          ) : (
+            <Sun className="h-5 w-5" />
+          )}
+        </Button>
+      </div>
+
       <Card className="w-full max-w-md">
         <CardContent className="space-y-6 p-6">
-          <div className="space-y-4 text-center">
+          <div className="text-center">
             <h1 className="text-4xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
               SIMPLE BUDGET
             </h1>
-            <p className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
-              {mode === "signin" ? "Sign in" : "Create account"}
-            </p>
           </div>
           <form className="space-y-3" onSubmit={handleSubmit}>
             <div className="space-y-1">
