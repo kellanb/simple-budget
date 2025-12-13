@@ -42,4 +42,6 @@ next-env.d.ts
 
 # cursor IDE
 .cursor/
-CHAT.md
+
+# Personal conversation history (optional - can be tracked if desired)
+docs/project/CHAT.md
