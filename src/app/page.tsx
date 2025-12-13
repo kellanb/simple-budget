@@ -662,7 +662,7 @@ function MonthYearPicker({
         <select
           value={tempYear}
           onChange={(e) => setTempYear(Number(e.target.value))}
-          className="rounded-lg border-none bg-transparent px-2 py-1 text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-zinc-50"
+          className="rounded-lg border-none bg-transparent px-2 py-1 text-base sm:text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-zinc-50"
         >
           {years.map((y) => (
             <option key={y} value={y}>
@@ -758,7 +758,7 @@ function CopyFromMonthModal({
               Select month to copy from
             </label>
             <select
-              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               value={selectedMonthId}
               onChange={(e) => setSelectedMonthId(e.target.value as Id<"months">)}
             >
@@ -1345,7 +1345,7 @@ function TransactionFormSheet({
                 Type
               </label>
               <select
-                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
                 value={form.type}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -1404,7 +1404,7 @@ function TransactionFormSheet({
                   Savings mode
                 </label>
                 <select
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
                   value={form.mode}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, mode: e.target.value as Transaction["mode"] }))
@@ -1436,7 +1436,7 @@ function TransactionFormSheet({
                       Linked income
                     </label>
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
                       value={form.linkedIncomeId ?? ""}
                       onChange={(e) =>
                         setForm((f) => ({

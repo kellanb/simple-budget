@@ -18,6 +18,13 @@ export const metadata: Metadata = {
   description: "Simple Budget - Mobile-first cash flow planner with Convex backend",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
