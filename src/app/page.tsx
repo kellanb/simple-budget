@@ -646,7 +646,7 @@ function MonthYearPicker({
         <select
           value={tempYear}
           onChange={(e) => setTempYear(Number(e.target.value))}
-          className="rounded-lg border-none bg-transparent px-2 py-1 text-base sm:text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-zinc-50"
+          className="rounded-lg border-none bg-transparent px-2 py-1 text-base sm:text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-zinc-50 [color-scheme:light] dark:[color-scheme:dark]"
         >
           {years.map((y) => (
             <option key={y} value={y}>
