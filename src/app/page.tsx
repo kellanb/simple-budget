@@ -742,7 +742,7 @@ function CopyFromMonthModal({
               Select month to copy from
             </label>
             <select
-              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 [color-scheme:light] dark:[color-scheme:dark]"
               value={selectedMonthId}
               onChange={(e) => setSelectedMonthId(e.target.value as Id<"months">)}
             >
@@ -1378,7 +1378,7 @@ function TransactionFormSheet({
                 Type
               </label>
               <select
-                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 [color-scheme:light] dark:[color-scheme:dark]"
                 value={form.type}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -1437,7 +1437,7 @@ function TransactionFormSheet({
                   Savings mode
                 </label>
                 <select
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 [color-scheme:light] dark:[color-scheme:dark]"
                   value={form.mode}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, mode: e.target.value as Transaction["mode"] }))
@@ -1469,7 +1469,7 @@ function TransactionFormSheet({
                       Linked income
                     </label>
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900"
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 [color-scheme:light] dark:[color-scheme:dark]"
                       value={form.linkedIncomeId ?? ""}
                       onChange={(e) =>
                         setForm((f) => ({
