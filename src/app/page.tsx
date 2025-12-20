@@ -420,7 +420,7 @@ export default function Home() {
           </Button>
         </div>
 
-        <div className="pb-4">
+        <div className="pb-24">
                 {monthExists && displayTransactions ? (
                   <DndContext 
                     sensors={sensors} 
@@ -534,34 +534,33 @@ function ControlsBar({
   onNextMonth: () => void;
   onSelectMonth: (year: number, monthIndex: number) => void;
 }) {
-  const { theme, toggleTheme } = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
   const monthButtonRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-start">
       {/* Date picker on the left */}
-      <div className="relative flex items-center">
+      <div className="relative flex items-center gap-2">
         <button
           onClick={onPrevMonth}
-          className="rounded-lg pr-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 active:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
           aria-label="Previous month"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-6 w-6" />
         </button>
         <button
           ref={monthButtonRef}
           onClick={() => setPickerOpen(!pickerOpen)}
-          className="min-w-[120px] rounded-xl border border-zinc-300 bg-white px-2 py-1.5 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+          className="min-w-[140px] rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 shadow-sm outline-none hover:bg-zinc-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
         >
           {monthLabel(year, monthIndex)}
         </button>
         <button
           onClick={onNextMonth}
-          className="rounded-lg pl-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 active:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
           aria-label="Next month"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-6 w-6" />
         </button>
 
         <MonthYearPicker
@@ -573,21 +572,6 @@ function ControlsBar({
           anchorRef={monthButtonRef}
         />
       </div>
-
-      {/* Theme toggle on the right */}
-      <Button 
-        variant="outline" 
-        size="icon" 
-        onClick={toggleTheme} 
-        title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-        className="h-8 w-8"
-      >
-        {theme === "light" ? (
-          <Moon className="h-4 w-4" />
-        ) : (
-          <Sun className="h-4 w-4" />
-        )}
-      </Button>
     </div>
   );
 }
@@ -977,19 +961,29 @@ function TransactionRow({
     transition,
   };
 
-  const amountColor =
-    transaction.type === "income"
+  const isPaid = transaction.isPaid;
+  
+  // Muted colors when paid
+  const amountColor = isPaid
+    ? "text-zinc-400 dark:text-zinc-500"
+    : transaction.type === "income"
       ? "text-emerald-600"
       : transaction.type === "saving"
         ? "text-sky-600"
         : "text-rose-600";
 
-  // Badge colors for type
-  const badgeStyles = {
-    income: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-    bill: "bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
-    saving: "bg-sky-50 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
-  };
+  // Badge colors for type - muted when paid
+  const badgeStyles = isPaid
+    ? {
+        income: "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+        bill: "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+        saving: "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+      }
+    : {
+        income: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+        bill: "bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+        saving: "bg-sky-50 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+      };
 
   // Format date as ordinal
   const dayNumber = parseInt(transaction.date, 10);
@@ -1000,12 +994,20 @@ function TransactionRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 transition-all duration-200",
+        "flex items-center gap-3 rounded-2xl border p-3 shadow-sm transition-all duration-200",
+        isPaid
+          ? "border-zinc-100 bg-zinc-50/50 dark:border-zinc-800/50 dark:bg-zinc-900/50"
+          : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900",
         (isDragging || isSortableDragging) && "opacity-40 scale-[0.98]"
       )}
     >
       <button
-        className="flex h-10 w-6 items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-grab active:cursor-grabbing touch-none"
+        className={cn(
+          "flex h-10 w-6 items-center justify-center cursor-grab active:cursor-grabbing touch-none",
+          isPaid
+            ? "text-zinc-300 hover:text-zinc-400 dark:text-zinc-600 dark:hover:text-zinc-500"
+            : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+        )}
         {...attributes}
         {...listeners}
       >
@@ -1014,16 +1016,33 @@ function TransactionRow({
       <div className="flex flex-1 flex-col gap-0.5">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            <p className={cn(
+              "text-sm font-semibold",
+              isPaid
+                ? "text-zinc-400 dark:text-zinc-500"
+                : "text-zinc-900 dark:text-zinc-50"
+            )}>
               {transaction.label}
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Due: {formattedDate}</p>
+            <span className={cn(
+              "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium",
+              isPaid
+                ? "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+            )}>
+              {formattedDate}
+            </span>
           </div>
           <div className="text-right">
             <p className={cn("text-sm font-semibold", amountColor)}>
               {formatCurrency(transaction.amountCents, currency)}
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className={cn(
+              "text-xs",
+              isPaid
+                ? "text-zinc-300 dark:text-zinc-600"
+                : "text-zinc-500 dark:text-zinc-400"
+            )}>
               After: {formatCurrency(projectedBalance ?? 0, currency)}
             </p>
           </div>
@@ -1038,22 +1057,26 @@ function TransactionRow({
                   : "Bill"}
             </Badge>
             {transaction.isRecurring && (
-              <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+              <Badge className={cn(
+                isPaid
+                  ? "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                  : "bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+              )}>
                 Recurring
               </Badge>
             )}
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onTogglePaid(!transaction.isPaid)}
+              onClick={() => onTogglePaid(!isPaid)}
               className={cn(
                 "rounded-lg px-2 py-1 text-xs font-medium transition-colors",
-                transaction.isPaid
+                isPaid
                   ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-900/70"
                   : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
               )}
             >
-              {transaction.isPaid ? (
+              {isPaid ? (
                 <span className="flex items-center gap-1">
                   <Check className="h-3 w-3" />
                   Paid
@@ -1064,14 +1087,24 @@ function TransactionRow({
             </button>
             <button
               onClick={onEdit}
-              className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className={cn(
+                "rounded-lg p-1",
+                isPaid
+                  ? "text-zinc-300 hover:bg-zinc-100 hover:text-zinc-500 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-400"
+                  : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              )}
               aria-label="Edit"
             >
               <Pencil className="h-4 w-4" />
             </button>
             <button
               onClick={onDelete}
-              className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30"
+              className={cn(
+                "rounded-lg p-1",
+                isPaid
+                  ? "text-zinc-300 hover:bg-zinc-100 hover:text-rose-400 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-rose-400"
+                  : "text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30"
+              )}
               aria-label="Delete"
             >
               <Trash2 className="h-4 w-4" />

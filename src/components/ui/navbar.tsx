@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/theme/theme-context";
 import { Button } from "./button";
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut, Menu, Moon, Sun, X } from "lucide-react";
 
 type NavItem = {
   label: string;
@@ -17,6 +18,7 @@ type NavbarProps = {
 };
 
 export function Navbar({ items, onSignOut }: NavbarProps) {
+  const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Prevent body scroll when mobile menu is open
@@ -63,16 +65,42 @@ export function Navbar({ items, onSignOut }: NavbarProps) {
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={toggleTheme}
+                title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                className="ml-1 h-9 w-9 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                {theme === "light" ? (
+                  <Moon className="h-4 w-4" />
+                ) : (
+                  <Sun className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={onSignOut}
                 title="Sign out"
-                className="ml-1 h-9 w-9 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                className="h-9 w-9 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
 
-            {/* Mobile menu button */}
-            <div className="flex items-center md:hidden">
+            {/* Mobile: Theme toggle and menu button */}
+            <div className="flex items-center gap-1 md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                className="h-9 w-9 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                {theme === "light" ? (
+                  <Moon className="h-5 w-5" />
+                ) : (
+                  <Sun className="h-5 w-5" />
+                )}
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
