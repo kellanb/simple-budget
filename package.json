@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test convex/**/*.test.ts",
     "convex:dev": "convex dev"
   },
   "dependencies": {
@@ -21,7 +22,7 @@
     "clsx": "^2.1.1",
     "convex": "^1.30.0",
     "lucide-react": "^0.556.0",
-    "next": "16.0.8",
+    "next": "^16.1.1",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "tailwind-merge": "^3.4.0"
@@ -34,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
     "tailwindcss": "^4",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }

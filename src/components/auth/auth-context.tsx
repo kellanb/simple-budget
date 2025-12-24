@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 
@@ -23,16 +23,29 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const STORAGE_KEY = "cashflow.sessionToken";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(STORAGE_KEY);
-  });
+  const [token, setToken] = useState<string | null>(null);
+  const [hasBootstrapped, setHasBootstrapped] = useState(false);
+
+  // Read persisted token only after hydration to avoid SSR/CSR mismatches
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    setToken(stored);
+    setHasBootstrapped(true);
+  }, []);
 
   const session = useQuery(api.auth.getSession, token ? { token } : "skip");
 
   const signInMutation = useMutation(api.auth.signIn);
   const signUpMutation = useMutation(api.auth.signUp);
   const signOutMutation = useMutation(api.auth.signOut);
+
+  // Clear stale tokens if the backend reports no active session
+  useEffect(() => {
+    if (token && session === null) {
+      localStorage.removeItem(STORAGE_KEY);
+      setToken(null);
+    }
+  }, [token, session]);
 
   const user = useMemo(() => {
     if (!session || session === undefined || !token) return null;
@@ -44,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [session, token]);
 
-  const isLoading = token !== null && session === undefined;
+  const isLoading = (token !== null && session === undefined) || !hasBootstrapped;
 
   const handleAuthResult = (result: {
     token: string;
@@ -54,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }) => {
     localStorage.setItem(STORAGE_KEY, result.token);
     setToken(result.token);
+    setHasBootstrapped(true);
   };
 
   const signIn = async (email: string, password: string) => {

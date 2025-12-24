@@ -25,7 +25,6 @@ import {
   Sheet,
   SheetContent,
 } from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -91,6 +90,7 @@ export default function Home() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Start with current month
   const now = new Date();
@@ -124,7 +124,7 @@ export default function Home() {
       : "skip",
   ) as { exists: boolean; projectedEndCents: number | null } | undefined;
 
-  const [projectedEndCache, setProjectedEndCache] = useState<Record<string, number | null>>({});
+  const projectedEndCacheRef = useRef<Record<string, number | null>>({});
 
   const { prevYear, prevMonthIndex } = useMemo(() => {
     let year = selectedYear;
@@ -140,10 +140,10 @@ export default function Home() {
 
   const resolvedPreviousProjectedEnd = useMemo(() => {
     if (previousMonthData === undefined) {
-      return projectedEndCache[previousMonthKey];
+      return projectedEndCacheRef.current[previousMonthKey];
     }
     return previousMonthData?.projectedEndCents;
-  }, [previousMonthData, projectedEndCache, previousMonthKey]);
+  }, [previousMonthData, previousMonthKey]);
 
   const effectiveStartingBalance =
     currentMonth?.usePreviousMonthEnd &&
@@ -183,19 +183,19 @@ export default function Home() {
   useEffect(() => {
     if (!currentMonth) return;
     const key = `${currentMonth.year}-${currentMonth.monthIndex}`;
-    setProjectedEndCache((cache) => {
-      if (cache[key] === balances.projectedEndBalanceCents) return cache;
-      return { ...cache, [key]: balances.projectedEndBalanceCents };
-    });
+    const nextValue = balances.projectedEndBalanceCents;
+    if (projectedEndCacheRef.current[key] !== nextValue) {
+      projectedEndCacheRef.current[key] = nextValue;
+    }
   }, [balances.projectedEndBalanceCents, currentMonth]);
 
   // Also cache the previous month result when it loads to avoid flicker on reload
   useEffect(() => {
     if (previousMonthData === undefined) return;
-    setProjectedEndCache((cache) => {
-      if (cache[previousMonthKey] === previousMonthData.projectedEndCents) return cache;
-      return { ...cache, [previousMonthKey]: previousMonthData.projectedEndCents ?? null };
-    });
+    const nextValue = previousMonthData.projectedEndCents ?? null;
+    if (projectedEndCacheRef.current[previousMonthKey] !== nextValue) {
+      projectedEndCacheRef.current[previousMonthKey] = nextValue;
+    }
   }, [previousMonthData, previousMonthKey]);
 
   const sensors = useSensors(
@@ -205,7 +205,7 @@ export default function Home() {
   );
 
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [localTransactions, setLocalTransactions] = useState<Transaction[] | null>(null);
+  const [optimisticReorder, setOptimisticReorder] = useState<Transaction[] | null>(null);
   const [sortModeOverride, setSortModeOverride] = useState<SortMode | null>(null);
   
   // Track scroll position for scroll-to-top button
@@ -222,15 +222,19 @@ export default function Home() {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  
-  // Sync local transactions with server data
+
   useEffect(() => {
-    if (transactions) {
-      setLocalTransactions(transactions);
-    }
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+  
+  useEffect(() => {
+    // Clear optimistic state once the server responds with fresh data
+    setOptimisticReorder(null);
   }, [transactions]);
 
-  const displayTransactions = localTransactions ?? transactions;
+  const displayTransactions = optimisticReorder ?? transactions;
   const activeTransaction = displayTransactions?.find((t) => t._id === activeId);
 
   // Compute sort mode by comparing current order with due-date order
@@ -279,11 +283,18 @@ export default function Home() {
     setSortModeOverride(null);
     
     // Optimistically update local state immediately
+    const previousOrder = displayTransactions;
     const reordered = arrayMove(displayTransactions, oldIndex, newIndex);
-    setLocalTransactions(reordered);
+    setOptimisticReorder(reordered);
     
     const orderedIds = reordered.map((t) => t._id);
-    await reorderTx({ token: user.token, monthId: currentMonth._id, orderedIds });
+    try {
+      await reorderTx({ token: user.token, monthId: currentMonth._id, orderedIds });
+    } catch (error) {
+      console.error("Failed to persist reorder", error);
+      setOptimisticReorder(previousOrder);
+      setToastMessage("Could not save the new order. Restored the previous list.");
+    }
   };
 
   const onDragCancel = () => {
@@ -721,6 +732,19 @@ export default function Home() {
           <ArrowUp className="h-5 w-5" />
         </button>
       )}
+
+      {toastMessage && (
+        <div className="fixed bottom-6 left-6 z-50 flex items-start gap-3 rounded-lg bg-rose-500 px-4 py-3 text-white shadow-lg dark:bg-rose-600">
+          <span className="text-sm font-medium">{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="mt-0.5 text-white/80 hover:text-white"
+            aria-label="Dismiss toast"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </main>
   );
 }
@@ -801,7 +825,7 @@ function MonthYearPicker({
   // Generate years from 2000 to 2050
   const years = Array.from({ length: 51 }, (_, i) => 2000 + i);
 
-  // Reset temp year when opening
+  // Reset temp year when opening to keep picker aligned with current selection
   useEffect(() => {
     if (open) {
       setTempYear(year);
@@ -1000,7 +1024,7 @@ function CopyFromMonthModal({
   const [includeAmounts, setIncludeAmounts] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset state when modal opens
+  // Reset modal state intentionally when it opens to avoid stale selections
   useEffect(() => {
     if (open) {
       setSelectedMonthId("");

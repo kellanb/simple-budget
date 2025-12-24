@@ -1,6 +1,16 @@
+import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { clearSession, createSession, requireSession } from "./utils";
+
+const HASH_VERSION = 2;
+const PBKDF2_ITERATIONS = 300_000;
+const DERIVED_KEY_LENGTH_BYTES = 32;
+const ALGO_LABEL = "PBKDF2-SHA256";
+
+export const PASSWORD_HASH_VERSION = HASH_VERSION;
+export const PASSWORD_ITERATIONS = PBKDF2_ITERATIONS;
+export const PASSWORD_ALGO = ALGO_LABEL;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -18,10 +28,98 @@ function generateSalt(): string {
   return toHex(buf.buffer);
 }
 
-async function hashPassword(password: string, salt: string) {
+function fromHex(hex: string) {
+  if (hex.length % 2 !== 0) {
+    throw new Error("Invalid hex input");
+  }
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+async function hashPasswordV1(password: string, salt: string) {
   const data = new TextEncoder().encode(`${password}:${salt}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return toHex(digest);
+}
+
+async function hashPasswordV2(password: string, salt: string, iterations = PBKDF2_ITERATIONS) {
+  const encodedPassword = new TextEncoder().encode(password);
+  const key = await crypto.subtle.importKey("raw", encodedPassword, "PBKDF2", false, ["deriveBits"]);
+  const saltBytes = fromHex(salt);
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: saltBytes,
+      iterations,
+      hash: "SHA-256",
+    },
+    key,
+    DERIVED_KEY_LENGTH_BYTES * 8,
+  );
+  return toHex(derivedBits);
+}
+
+function constantTimeEqualHex(a: string, b: string) {
+  let mismatch = a.length ^ b.length;
+  const max = Math.max(a.length, b.length);
+  for (let i = 0; i < max; i++) {
+    const aCode = a.charCodeAt(i) || 0;
+    const bCode = b.charCodeAt(i) || 0;
+    mismatch |= aCode ^ bCode;
+  }
+  return mismatch === 0;
+}
+
+type PasswordUpgrade = {
+  hashVersion: number;
+  iterations: number;
+  salt: string;
+  hash: string;
+  algo: string;
+};
+
+export async function verifyPassword(
+  password: string,
+  user: Doc<"users">,
+): Promise<{ valid: boolean; upgrade?: PasswordUpgrade }> {
+  const version = user.hashVersion ?? 1;
+
+  if (version === HASH_VERSION) {
+    const salt = user.salt ?? generateSalt();
+    const iterations = user.iterations ?? PBKDF2_ITERATIONS;
+    const derived = await hashPasswordV2(password, salt, iterations);
+    const storedHash = user.hash ?? "";
+    return { valid: constantTimeEqualHex(derived, storedHash) };
+  }
+
+  const expectedHash = await hashPasswordV1(password, user.salt);
+  const storedHash = user.passwordHash ?? "";
+  const valid = constantTimeEqualHex(expectedHash, storedHash);
+
+  if (!valid) {
+    return { valid: false };
+  }
+
+  const salt = generateSalt();
+  const hash = await hashPasswordV2(password, salt, PBKDF2_ITERATIONS);
+
+  return {
+    valid: true,
+    upgrade: {
+      hashVersion: HASH_VERSION,
+      iterations: PBKDF2_ITERATIONS,
+      salt,
+      hash,
+      algo: ALGO_LABEL,
+    },
+  };
+}
+
+export async function hashPasswordV2WithSalt(password: string, salt: string, iterations = PBKDF2_ITERATIONS) {
+  return hashPasswordV2(password, salt, iterations);
 }
 
 export const signUp = mutation({
@@ -46,12 +144,15 @@ export const signUp = mutation({
     }
 
     const salt = generateSalt();
-    const passwordHash = await hashPassword(password, salt);
+    const hash = await hashPasswordV2(password, salt);
 
     const userId = await ctx.db.insert("users", {
       email: normalized,
       salt,
-      passwordHash,
+      hash,
+      iterations: PBKDF2_ITERATIONS,
+      hashVersion: HASH_VERSION,
+      algo: ALGO_LABEL,
     });
 
     const session = await createSession(ctx, userId);
@@ -81,9 +182,13 @@ export const signIn = mutation({
       throw new Error("Invalid credentials");
     }
 
-    const expectedHash = await hashPassword(password, user.salt);
-    if (expectedHash !== user.passwordHash) {
+    const verification = await verifyPassword(password, user);
+    if (!verification.valid) {
       throw new Error("Invalid credentials");
+    }
+
+    if (verification.upgrade) {
+      await ctx.db.patch(user._id, verification.upgrade);
     }
 
     const session = await createSession(ctx, user._id);

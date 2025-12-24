@@ -26,6 +26,8 @@ Actionable plan with decisions finalized for implementation.
 
 **Decision:** Use PBKDF2-HMAC-SHA256 with per-user salt and stored parameters.
 
+- **Status (2025-12-24):** Implemented. New signups store PBKDF2 v2 hashes; logins migrate v1 → v2 on successful verify; unit tests cover hashing, migration, and failure path.
+
 - Parameters: iterations = **300,000** (tunable; aim for <250ms login), salt = **16 random bytes** (store as hex), output = 32-byte derived key as hex. Keep `hashVersion` to allow future upgrades.
 - Storage shape (example): `{ hashVersion: 2, algo: "PBKDF2-SHA256", iterations: 300000, salt: "<hex>", hash: "<hex>" }`.
 - Implementation:
@@ -88,26 +90,25 @@ Real-world impact: syncing server data into local state via `useEffect` adds ren
 ## Implementation Checklist (ready to execute)
 
 ### Phase 1: Quick Wins
-- [ ] Remove unused `ScrollArea` import (`src/app/page.tsx`).
-- [ ] Require `NEXT_PUBLIC_CONVEX_URL`; throw if missing; document dev/prod values (`src/app/providers.tsx`).
-- [ ] Add ESLint ignore for `convex/_generated/**` (flat vs legacy config as applicable).
+- [x] Remove unused `ScrollArea` import (`src/app/page.tsx`).
+- [x] Require `NEXT_PUBLIC_CONVEX_URL`; throw if missing; document dev/prod values (`src/app/providers.tsx`).
+- [x] Add ESLint ignore for `convex/_generated/**` (flat vs legacy config as applicable).
 
 ### Phase 2: Lint/State Fixes
-- [ ] Theme hydration: lazy initializer (or `useSyncExternalStore`) + optional mounted flag (`theme-context.tsx`).
-- [ ] Refactor `localTransactions` to derived `displayTransactions` with `optimisticReorder` (`page.tsx`).
-- [ ] Projection cache to `useRef` (`page.tsx`).
-- [ ] Modal/picker resets: keyed remount or annotated effect (`page.tsx`).
-- [ ] Scroll/click-outside handlers: keep; add targeted disable if linter trips (`page.tsx`).
+- [x] Theme hydration: lazy initializer (or `useSyncExternalStore`) + optional mounted flag (`theme-context.tsx`).
+- [x] Refactor `localTransactions` to derived `displayTransactions` with `optimisticReorder` (`page.tsx`).
+- [x] Projection cache to `useRef` (`page.tsx`).
+- [x] Modal/picker resets: keyed remount or annotated effect (`page.tsx`).
+- [x] Scroll/click-outside handlers: keep; add targeted disable if linter trips (`page.tsx`).
 
 ### Phase 3: Security (before prod)
-- [ ] Implement PBKDF2 v2 helpers (salt 16 bytes, iterations 300k, hex output) (`convex/auth.ts`).
-- [ ] Add `hashVersion`, `salt`, `iterations` fields to user schema; update login flow to migrate v1 → v2 on successful login.
-- [ ] Tests: hash/verify unit tests; login migration path; wrong-password constant-time failure.
-- [ ] (Optional) policy: force reset for any v1 users after a cutoff date.
+- [x] Implement PBKDF2 v2 helpers (salt 16 bytes, iterations 300k, hex output) (`convex/auth.ts`).
+- [x] Add `hashVersion`, `salt`, `iterations` fields to user schema; update login flow to migrate v1 → v2 on successful login.
+- [x] Tests: hash/verify unit tests; login migration path; wrong-password constant-time failure.
 
 ### Phase 4: UX/Behavior
-- [ ] Add rollback/refetch + toast on reorder failure (`page.tsx`).
-- [ ] Clear stale auth token when session is null (`auth-context.tsx`).
+- [x] Add rollback/refetch + toast on reorder failure (`page.tsx`).
+- [x] Clear stale auth token when session is null (`auth-context.tsx`).
 
 ---
 
