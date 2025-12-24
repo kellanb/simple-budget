@@ -52,6 +52,7 @@ type Month = {
   monthIndex: number;
   startingBalanceCents: number;
   currency: string;
+  usePreviousMonthEnd?: boolean;
 };
 
 type Transaction = {
@@ -112,6 +113,42 @@ export default function Home() {
       : "skip",
   ) as Transaction[] | undefined;
 
+  // Query for previous month's projected end balance
+  const previousMonthData = useQuery(
+    api.months.getPreviousMonthProjectedEnd,
+    user
+      ? { token: user.token, year: selectedYear, monthIndex: selectedMonthIndex }
+      : "skip",
+  ) as { exists: boolean; projectedEndCents: number | null } | undefined;
+
+  const [projectedEndCache, setProjectedEndCache] = useState<Record<string, number | null>>({});
+
+  const { prevYear, prevMonthIndex } = useMemo(() => {
+    let year = selectedYear;
+    let monthIdx = selectedMonthIndex - 1;
+    if (monthIdx < 0) {
+      monthIdx = 11;
+      year -= 1;
+    }
+    return { prevYear: year, prevMonthIndex: monthIdx };
+  }, [selectedYear, selectedMonthIndex]);
+
+  const previousMonthKey = `${prevYear}-${prevMonthIndex}`;
+
+  const resolvedPreviousProjectedEnd = useMemo(() => {
+    if (previousMonthData === undefined) {
+      return projectedEndCache[previousMonthKey];
+    }
+    return previousMonthData?.projectedEndCents;
+  }, [previousMonthData, projectedEndCache, previousMonthKey]);
+
+  const effectiveStartingBalance =
+    currentMonth?.usePreviousMonthEnd &&
+    resolvedPreviousProjectedEnd !== null &&
+    resolvedPreviousProjectedEnd !== undefined
+      ? resolvedPreviousProjectedEnd
+      : currentMonth?.startingBalanceCents ?? 0;
+
   const createMonth = useMutation(api.months.create);
   const updateMonthMeta = useMutation(api.months.updateMeta);
   const createTx = useMutation(api.transactions.create);
@@ -124,13 +161,32 @@ export default function Home() {
   const balances = useMemo(() => {
     if (!transactions || !currentMonth) {
       return {
-        currentBankBalanceCents: currentMonth?.startingBalanceCents ?? 0,
+        currentBankBalanceCents: effectiveStartingBalance,
         projectedBalances: {} as Record<string, number>,
-        projectedEndBalanceCents: currentMonth?.startingBalanceCents ?? 0,
+        projectedEndBalanceCents: effectiveStartingBalance,
       };
     }
-    return calculateBalances(transactions, currentMonth.startingBalanceCents);
-  }, [transactions, currentMonth]);
+    return calculateBalances(transactions, effectiveStartingBalance);
+  }, [transactions, currentMonth, effectiveStartingBalance]);
+
+  // Cache projected end balances for instant reuse when navigating months
+  useEffect(() => {
+    if (!currentMonth) return;
+    const key = `${currentMonth.year}-${currentMonth.monthIndex}`;
+    setProjectedEndCache((cache) => {
+      if (cache[key] === balances.projectedEndBalanceCents) return cache;
+      return { ...cache, [key]: balances.projectedEndBalanceCents };
+    });
+  }, [balances.projectedEndBalanceCents, currentMonth]);
+
+  // Also cache the previous month result when it loads to avoid flicker on reload
+  useEffect(() => {
+    if (previousMonthData === undefined) return;
+    setProjectedEndCache((cache) => {
+      if (cache[previousMonthKey] === previousMonthData.projectedEndCents) return cache;
+      return { ...cache, [previousMonthKey]: previousMonthData.projectedEndCents ?? null };
+    });
+  }, [previousMonthData, previousMonthKey]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -296,12 +352,61 @@ export default function Home() {
     }
     if (!monthId) return;
 
+    // When user manually edits, turn off usePreviousMonthEnd
     await updateMonthMeta({
       token: user.token,
       monthId,
       startingBalanceCents: newBalanceCents,
+      usePreviousMonthEnd: false,
     });
   };
+
+  const handleToggleUsePreviousMonth = async (checked: boolean) => {
+    if (!user) return;
+    
+    // Ensure month exists
+    let monthId = currentMonth?._id;
+    if (!monthId) {
+      monthId = await ensureMonthExists() ?? undefined;
+    }
+    if (!monthId) return;
+
+    if (checked && resolvedPreviousProjectedEnd !== null && resolvedPreviousProjectedEnd !== undefined) {
+      // When toggling on, update both the flag and the starting balance
+      await updateMonthMeta({
+        token: user.token,
+        monthId,
+        startingBalanceCents: resolvedPreviousProjectedEnd,
+        usePreviousMonthEnd: true,
+      });
+    } else {
+      // When toggling off, reset starting balance to zero
+      await updateMonthMeta({
+        token: user.token,
+        monthId,
+        startingBalanceCents: 0,
+        usePreviousMonthEnd: false,
+      });
+    }
+  };
+
+  // Keep starting balance in sync with previous month's projected end when usePreviousMonthEnd is true
+  useEffect(() => {
+    if (
+      user &&
+      currentMonth?.usePreviousMonthEnd &&
+      previousMonthData?.exists &&
+      resolvedPreviousProjectedEnd !== null &&
+      resolvedPreviousProjectedEnd !== undefined &&
+      currentMonth.startingBalanceCents !== resolvedPreviousProjectedEnd
+    ) {
+      updateMonthMeta({
+        token: user.token,
+        monthId: currentMonth._id,
+        startingBalanceCents: resolvedPreviousProjectedEnd,
+      });
+    }
+  }, [user, currentMonth, previousMonthData, resolvedPreviousProjectedEnd, updateMonthMeta]);
 
   const handlePrevMonth = () => {
     if (selectedMonthIndex === 0) {
@@ -389,11 +494,18 @@ export default function Home() {
 
         <div className="shrink-0">
           <BalanceCard
-            startingBalance={currentMonth?.startingBalanceCents ?? 0}
+            startingBalance={effectiveStartingBalance}
             current={balances.currentBankBalanceCents}
             projected={balances.projectedEndBalanceCents}
             currency={currentMonth?.currency ?? "USD"}
             onUpdateStartingBalance={handleUpdateStartingBalance}
+            previousMonthData={previousMonthData}
+            usePreviousMonthEnd={currentMonth?.usePreviousMonthEnd ?? false}
+            onToggleUsePreviousMonth={handleToggleUsePreviousMonth}
+            previousMonthLoading={
+              (currentMonth?.usePreviousMonthEnd ?? false) &&
+              resolvedPreviousProjectedEnd === undefined
+            }
           />
         </div>
 
@@ -810,12 +922,20 @@ function BalanceCard({
   projected,
   currency,
   onUpdateStartingBalance,
+  previousMonthData,
+  usePreviousMonthEnd,
+  onToggleUsePreviousMonth,
+  previousMonthLoading,
 }: {
   startingBalance: number;
   current: number;
   projected: number;
   currency: string;
   onUpdateStartingBalance: (newBalance: number) => Promise<void>;
+  previousMonthData?: { exists: boolean; projectedEndCents: number | null };
+  usePreviousMonthEnd: boolean;
+  onToggleUsePreviousMonth: (checked: boolean) => void;
+  previousMonthLoading?: boolean;
 }) {
   const [isEditingStarting, setIsEditingStarting] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -850,6 +970,9 @@ function BalanceCard({
         ? "text-rose-600"
         : "text-zinc-800 dark:text-zinc-200";
 
+  // Show checkbox only if previous month has data
+  const showPreviousMonthOption = previousMonthData?.exists === true;
+
   return (
     <Card className="bg-white dark:bg-zinc-900">
       <CardContent className="p-4">
@@ -859,7 +982,9 @@ function BalanceCard({
             <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Starting
             </p>
-            {isEditingStarting ? (
+            {previousMonthLoading ? (
+              <div className="mt-1 h-6 w-24 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+            ) : isEditingStarting ? (
               <div className="mt-1 flex items-center gap-1">
                 <span className="text-sm text-zinc-500">$</span>
                 <Input
@@ -893,14 +1018,28 @@ function BalanceCard({
                 <p className={cn("text-base font-semibold", startingColor)}>
                   {formatCurrency(startingBalance, currency)}
                 </p>
-                <button
-                  onClick={startEdit}
-                  className="rounded p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
-                  aria-label="Edit starting balance"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
+                {!usePreviousMonthEnd && (
+                  <button
+                    onClick={startEdit}
+                    className="rounded p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                    aria-label="Edit starting balance"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                )}
               </div>
+            )}
+            {showPreviousMonthOption && (
+              <label className="mt-2 flex items-center gap-1.5 cursor-pointer">
+                <Checkbox
+                  checked={usePreviousMonthEnd}
+                  onCheckedChange={(checked) => onToggleUsePreviousMonth(Boolean(checked))}
+                  className="h-3.5 w-3.5"
+                />
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                  Use prev month end
+                </span>
+              </label>
             )}
           </div>
 
@@ -1038,10 +1177,12 @@ function TransactionRow({
               {formatCurrency(transaction.amountCents, currency)}
             </p>
             <p className={cn(
-              "text-xs",
+              "text-xs sm:text-sm",
               isPaid
                 ? "text-zinc-300 dark:text-zinc-600"
-                : "text-zinc-500 dark:text-zinc-400"
+                : (projectedBalance ?? 0) < 0
+                  ? "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 font-semibold px-1.5 py-0.5 rounded inline-block"
+                  : "text-zinc-500 dark:text-zinc-400"
             )}>
               After: {formatCurrency(projectedBalance ?? 0, currency)}
             </p>
@@ -1160,7 +1301,12 @@ function TransactionRowOverlay({
             <p className={cn("text-sm font-semibold", amountColor)}>
               {formatCurrency(transaction.amountCents, currency)}
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className={cn(
+              "text-xs sm:text-sm",
+              (projectedBalance ?? 0) < 0
+                ? "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 font-semibold px-1.5 py-0.5 rounded inline-block"
+                : "text-zinc-500 dark:text-zinc-400"
+            )}>
               After: {formatCurrency(projectedBalance ?? 0, currency)}
             </p>
           </div>

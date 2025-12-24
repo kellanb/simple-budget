@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireSession } from "./utils";
+import type { Doc } from "./_generated/dataModel";
 
 const DEFAULT_CURRENCY = "USD";
 
@@ -50,6 +51,7 @@ export const updateMeta = mutation({
     monthId: v.id("months"),
     name: v.optional(v.string()),
     startingBalanceCents: v.optional(v.number()),
+    usePreviousMonthEnd: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { user } = await requireSession(ctx, args.token);
@@ -58,11 +60,100 @@ export const updateMeta = mutation({
       throw new Error("Month not found");
     }
 
-    await ctx.db.patch(args.monthId, {
-      name: args.name ?? month.name,
-      startingBalanceCents:
-        args.startingBalanceCents ?? month.startingBalanceCents,
-    });
+    const patch: {
+      name?: string;
+      startingBalanceCents?: number;
+      usePreviousMonthEnd?: boolean;
+    } = {};
+    
+    if (args.name !== undefined) {
+      patch.name = args.name;
+    }
+    if (args.startingBalanceCents !== undefined) {
+      patch.startingBalanceCents = args.startingBalanceCents;
+    }
+    if (args.usePreviousMonthEnd !== undefined) {
+      patch.usePreviousMonthEnd = args.usePreviousMonthEnd;
+    }
+
+    await ctx.db.patch(args.monthId, patch);
+  },
+});
+
+// Helper to calculate projected end balance from transactions
+function calculateProjectedEndBalance(
+  transactions: Array<Doc<"transactions">>,
+  startingBalanceCents: number
+): number {
+  const sorted = [...transactions].sort((a, b) => a.order - b.order);
+  
+  // Build income lookup for percentage-based savings
+  const incomeLookup = new Map<string, number>();
+  for (const tx of sorted) {
+    if (tx.type === "income") {
+      incomeLookup.set(tx._id, tx.amountCents);
+    }
+  }
+  
+  let cumulative = startingBalanceCents;
+  for (const tx of sorted) {
+    let amountCents = tx.amountCents;
+    
+    // Resolve percentage-based savings
+    if (tx.type === "saving" && tx.mode === "percentage" && tx.linkedIncomeId) {
+      const incomeAmount = incomeLookup.get(tx.linkedIncomeId) ?? 0;
+      const pct = tx.savingsPercentage ?? 0;
+      amountCents = Math.round((incomeAmount * pct) / 100);
+    }
+    
+    const delta = tx.type === "income" ? amountCents : -amountCents;
+    cumulative += delta;
+  }
+  
+  return cumulative;
+}
+
+export const getPreviousMonthProjectedEnd = query({
+  args: {
+    token: v.string(),
+    year: v.number(),
+    monthIndex: v.number(),
+  },
+  handler: async (ctx, { token, year, monthIndex }) => {
+    const { user } = await requireSession(ctx, token);
+    
+    // Calculate previous month (handle year boundary)
+    let prevYear = year;
+    let prevMonthIndex = monthIndex - 1;
+    if (prevMonthIndex < 0) {
+      prevMonthIndex = 11;
+      prevYear = year - 1;
+    }
+    
+    // Find the previous month
+    const prevMonth = await ctx.db
+      .query("months")
+      .withIndex("by_user_and_month", (q) =>
+        q.eq("userId", user._id).eq("year", prevYear).eq("monthIndex", prevMonthIndex)
+      )
+      .unique();
+    
+    if (!prevMonth) {
+      return { exists: false, projectedEndCents: null };
+    }
+    
+    // Get transactions for the previous month
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_month_order", (q) => q.eq("monthId", prevMonth._id))
+      .collect();
+    
+    const projectedEndCents = calculateProjectedEndBalance(
+      transactions,
+      prevMonth.startingBalanceCents
+    );
+    
+    return { exists: true, projectedEndCents };
   },
 });
 

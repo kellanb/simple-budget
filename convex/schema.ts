@@ -23,6 +23,7 @@ export default defineSchema({
     monthIndex: v.number(),
     startingBalanceCents: v.number(),
     currency: v.string(),
+    usePreviousMonthEnd: v.optional(v.boolean()),
   }).index("by_user_and_month", ["userId", "year", "monthIndex"]),
 
   transactions: defineTable({
