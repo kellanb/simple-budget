@@ -7,10 +7,10 @@ import { ThemeProvider } from "@/components/theme/theme-context";
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
 if (!convexUrl) {
-  console.warn("Set NEXT_PUBLIC_CONVEX_URL to your Convex deployment URL.");
+  throw new Error("NEXT_PUBLIC_CONVEX_URL is required.");
 }
 
-const convexClient = new ConvexReactClient(convexUrl || "http://localhost:3000");
+const convexClient = new ConvexReactClient(convexUrl);
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (

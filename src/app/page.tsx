@@ -30,8 +30,11 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   ArrowUp,
+  ArrowUpDown,
+  CalendarDays,
   CalendarPlus,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -157,6 +160,7 @@ export default function Home() {
   const reorderTx = useMutation(api.transactions.reorder);
   const togglePaid = useMutation(api.transactions.togglePaid);
   const copyFromMonth = useMutation(api.transactions.copyFromMonth);
+  const sortByDueDateMutation = useMutation(api.transactions.sortByDueDate);
 
   const balances = useMemo(() => {
     if (!transactions || !currentMonth) {
@@ -168,6 +172,12 @@ export default function Home() {
     }
     return calculateBalances(transactions, effectiveStartingBalance);
   }, [transactions, currentMonth, effectiveStartingBalance]);
+
+  // Helper to parse date for sorting (empty/invalid dates go to end)
+  const parseDateForSort = (date: string): number => {
+    const day = parseInt(date, 10);
+    return isNaN(day) || date === "" ? 999 : day;
+  };
 
   // Cache projected end balances for instant reuse when navigating months
   useEffect(() => {
@@ -196,6 +206,7 @@ export default function Home() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localTransactions, setLocalTransactions] = useState<Transaction[] | null>(null);
+  const [sortModeOverride, setSortModeOverride] = useState<SortMode | null>(null);
   
   // Track scroll position for scroll-to-top button
   useEffect(() => {
@@ -222,6 +233,33 @@ export default function Home() {
   const displayTransactions = localTransactions ?? transactions;
   const activeTransaction = displayTransactions?.find((t) => t._id === activeId);
 
+  // Compute sort mode by comparing current order with due-date order
+  const computedSortMode: SortMode = useMemo(() => {
+    if (!displayTransactions || displayTransactions.length <= 1) {
+      return "dueDate";
+    }
+
+    // Get the due-date sorted order
+    const dueDateSorted = [...displayTransactions].sort((a, b) => {
+      const dayA = parseDateForSort(a.date);
+      const dayB = parseDateForSort(b.date);
+      if (dayA !== dayB) return dayA - dayB;
+      // If same date, use current order as tiebreaker for stability
+      return a.order - b.order;
+    });
+
+    // Compare with current order (which is already sorted by order field)
+    const currentOrder = displayTransactions.map((t) => t._id);
+    const dueDateOrder = dueDateSorted.map((t) => t._id);
+
+    // Check if orders match
+    const isSameOrder = currentOrder.every((id, idx) => id === dueDateOrder[idx]);
+    return isSameOrder ? "dueDate" : "custom";
+  }, [displayTransactions]);
+
+  // Use override if set, otherwise use computed value
+  const sortMode: SortMode = sortModeOverride ?? computedSortMode;
+
   const onDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -236,6 +274,9 @@ export default function Home() {
     const newIndex = displayTransactions.findIndex((t) => t._id === over.id);
     
     if (oldIndex === -1 || newIndex === -1) return;
+    
+    // Clear sort mode override - dragging creates custom order, computed value will reflect it
+    setSortModeOverride(null);
     
     // Optimistically update local state immediately
     const reordered = arrayMove(displayTransactions, oldIndex, newIndex);
@@ -292,25 +333,49 @@ export default function Home() {
         },
       });
     } else {
-      // Calculate order for new savings - place directly below linked income
+      // Calculate order based on due date position
       let order = input.order;
+      
       if (input.type === "saving" && input.linkedIncomeId && transactions) {
+        // Special case: savings linked to income go directly below the income
         const linkedIncome = transactions.find((t) => t._id === input.linkedIncomeId);
         if (linkedIncome) {
-          // Find all transactions after the linked income
           const incomeOrder = linkedIncome.order;
-          // Insert right after the linked income by using a fractional order
-          // Find the next item after the income
           const sortedTxs = [...transactions].sort((a, b) => a.order - b.order);
           const incomeIdx = sortedTxs.findIndex((t) => t._id === input.linkedIncomeId);
           if (incomeIdx !== -1 && incomeIdx < sortedTxs.length - 1) {
-            // Place between income and next item
             const nextOrder = sortedTxs[incomeIdx + 1].order;
             order = (incomeOrder + nextOrder) / 2;
           } else {
-            // Place after income
             order = incomeOrder + 1;
           }
+        }
+      } else if (transactions && transactions.length > 0) {
+        // Calculate order based on due date to insert at correct position
+        const newDay = parseDateForSort(input.date);
+        const sortedTxs = [...transactions].sort((a, b) => a.order - b.order);
+        
+        // Find where this item should be inserted based on due date
+        // It goes after all items with the same or earlier due date
+        let insertAfterIdx = -1;
+        for (let i = 0; i < sortedTxs.length; i++) {
+          const txDay = parseDateForSort(sortedTxs[i].date);
+          if (txDay <= newDay) {
+            insertAfterIdx = i;
+          }
+        }
+        
+        if (insertAfterIdx === -1) {
+          // Insert at the beginning
+          order = sortedTxs[0].order - 1;
+        } else if (insertAfterIdx === sortedTxs.length - 1) {
+          // Insert at the end
+          order = sortedTxs[insertAfterIdx].order + 1;
+        } else {
+          // Insert between insertAfterIdx and insertAfterIdx + 1
+          const prevOrder = sortedTxs[insertAfterIdx].order;
+          const nextOrder = sortedTxs[insertAfterIdx + 1].order;
+          order = (prevOrder + nextOrder) / 2;
         }
       }
       
@@ -409,6 +474,7 @@ export default function Home() {
   }, [user, currentMonth, previousMonthData, resolvedPreviousProjectedEnd, updateMonthMeta]);
 
   const handlePrevMonth = () => {
+    setSortModeOverride(null); // Reset sort mode when changing months
     if (selectedMonthIndex === 0) {
       setSelectedMonthIndex(11);
       setSelectedYear(selectedYear - 1);
@@ -418,6 +484,7 @@ export default function Home() {
   };
 
   const handleNextMonth = () => {
+    setSortModeOverride(null); // Reset sort mode when changing months
     if (selectedMonthIndex === 11) {
       setSelectedMonthIndex(0);
       setSelectedYear(selectedYear + 1);
@@ -427,6 +494,7 @@ export default function Home() {
   };
 
   const handleSelectMonth = (year: number, monthIndex: number) => {
+    setSortModeOverride(null); // Reset sort mode when changing months
     setSelectedYear(year);
     setSelectedMonthIndex(monthIndex);
   };
@@ -446,6 +514,20 @@ export default function Home() {
       includeAmounts,
     });
     setCopyModalOpen(false);
+  };
+
+  const handleSortModeChange = async (mode: SortMode) => {
+    if (!user || !currentMonth) return;
+    if (mode === "dueDate") {
+      setSortModeOverride(null); // Clear override, let computed value take over
+      await sortByDueDateMutation({
+        token: user.token,
+        monthId: currentMonth._id,
+      });
+    } else {
+      // "custom" mode - just show it as selected, user will drag to reorder
+      setSortModeOverride("custom");
+    }
   };
 
   // Determine if we should show the copy button (empty month)
@@ -534,20 +616,29 @@ export default function Home() {
 
         <div className="pb-24">
                 {monthExists && displayTransactions ? (
-                  <DndContext 
-                    sensors={sensors} 
-                    collisionDetection={closestCenter}
-                    onDragStart={onDragStart}
-                    onDragEnd={onDragEnd}
-                    onDragCancel={onDragCancel}
-                    modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                  >
-                    <SortableContext
-                      items={displayTransactions.map((t) => t._id)}
-                      strategy={verticalListSortingStrategy}
+                  <>
+                    {displayTransactions.length > 0 && (
+                      <div className="mb-3">
+                        <SortButton
+                          currentMode={sortMode}
+                          onSelectMode={handleSortModeChange}
+                        />
+                      </div>
+                    )}
+                    <DndContext 
+                      sensors={sensors} 
+                      collisionDetection={closestCenter}
+                      onDragStart={onDragStart}
+                      onDragEnd={onDragEnd}
+                      onDragCancel={onDragCancel}
+                      modifiers={[restrictToVerticalAxis, restrictToParentElement]}
                     >
-                      <div className="space-y-3">
-                        {displayTransactions.map((tx) => (
+                      <SortableContext
+                        items={displayTransactions.map((t) => t._id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-3">
+                          {displayTransactions.map((tx) => (
                           <TransactionRow
                             key={tx._id}
                             transaction={tx}
@@ -585,6 +676,7 @@ export default function Home() {
                       ) : null}
                     </DragOverlay>
                   </DndContext>
+                  </>
                 ) : (
                   <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
                     <CalendarPlus className="mx-auto mb-2 h-8 w-8 text-zinc-300 dark:text-zinc-600" />
@@ -791,6 +883,99 @@ function MonthYearPicker({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+type SortMode = "dueDate" | "custom";
+
+function SortButton({
+  currentMode,
+  onSelectMode,
+  disabled,
+}: {
+  currentMode: SortMode;
+  onSelectMode: (mode: SortMode) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const handleSelect = (mode: SortMode) => {
+    onSelectMode(mode);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        onClick={() => setOpen(!open)}
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+          "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+      >
+        <ArrowUpDown className="h-3.5 w-3.5" />
+        <span>Sort: {currentMode === "dueDate" ? "Due Date" : "Custom"}</span>
+        <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div
+          ref={dropdownRef}
+          className="absolute left-0 top-full z-50 mt-1 w-36 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          <button
+            onClick={() => handleSelect("dueDate")}
+            className={cn(
+              "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
+              currentMode === "dueDate"
+                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            )}
+          >
+            <CalendarDays className="h-4 w-4" />
+            Due Date
+            {currentMode === "dueDate" && <Check className="ml-auto h-4 w-4" />}
+          </button>
+          <button
+            onClick={() => handleSelect("custom")}
+            className={cn(
+              "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
+              currentMode === "custom"
+                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            )}
+          >
+            <GripVertical className="h-4 w-4" />
+            Custom
+            {currentMode === "custom" && <Check className="ml-auto h-4 w-4" />}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

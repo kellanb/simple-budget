@@ -11,13 +11,15 @@ npm install
 
 2) Configure Convex (needs interactive auth with your Convex account)
 ```bash
-# set your Convex deployment URL in .env.local
-echo 'NEXT_PUBLIC_CONVEX_URL=<your_convex_url>' > .env.local
-
-# then configure Convex (will prompt)
+# configure Convex (will prompt)
 npx convex dev
 ```
 This creates `convex.json`, generates `_generated/*`, and starts the dev backend.
+
+Then set your Convex URL for the frontend in `.env.local`:
+```bash
+NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+```
 
 3) Run Next.js
 ```bash
@@ -47,5 +49,5 @@ This project uses a unified deployment pipeline:
 
 ## Notes
 - The Convex CLI must run once to generate typed clients; the repo ships with lightweight stubs so the UI compiles, but real data needs `npx convex dev`.
-- Set `NEXT_PUBLIC_CONVEX_URL` to your dev deployment (from Convex dashboard or `convex dev` output).
+- `NEXT_PUBLIC_CONVEX_URL` is required; set it to your dev deployment (from Convex dashboard or `convex dev` output).
 - Tailwind is v4 CSS-first; UI primitives live in `src/components/ui`.

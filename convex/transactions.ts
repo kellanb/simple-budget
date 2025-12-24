@@ -136,6 +136,48 @@ export const reorder = mutation({
   },
 });
 
+// Helper to parse date for sorting (empty/invalid dates go to end)
+function parseDateForSort(date: string): number {
+  const day = parseInt(date, 10);
+  return isNaN(day) || date === "" ? 999 : day;
+}
+
+export const sortByDueDate = mutation({
+  args: {
+    token: v.string(),
+    monthId: v.id("months"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { token, monthId }) => {
+    const { user } = await requireSession(ctx, token);
+    await ensureMonth(ctx, monthId, user._id);
+
+    // Fetch all transactions for this month
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_month_order", (q) => q.eq("monthId", monthId))
+      .collect();
+
+    // Sort by date (ascending), empty dates go to end
+    // Use existing order as tiebreaker for stability
+    const sorted = [...transactions].sort((a, b) => {
+      const dayA = parseDateForSort(a.date);
+      const dayB = parseDateForSort(b.date);
+      if (dayA !== dayB) return dayA - dayB;
+      return a.order - b.order;
+    });
+
+    // Update order for each transaction
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].order !== i) {
+        await ctx.db.patch(sorted[i]._id, { order: i });
+      }
+    }
+
+    return null;
+  },
+});
+
 export const togglePaid = mutation({
   args: {
     token: v.string(),
