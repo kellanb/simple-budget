@@ -13,12 +13,34 @@ type SpreadsheetContainerProps = {
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
 const DEFAULT_SCALE = 1;
-const ZOOM_STEP = 0.25;
+const ZOOM_STEP = 0.1; // 10% zoom per button click
 
 export function SpreadsheetContainer({ children, className }: SpreadsheetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(DEFAULT_SCALE);
+  
+  // Use refs for smooth pinch-to-zoom (avoids React re-renders during gesture)
+  const liveScaleRef = useRef(DEFAULT_SCALE);
+  const isPinchingRef = useRef(false);
+  const animationFrameRef = useRef<number | null>(null);
+  
+  // Track pinch gesture state
+  const pinchState = useRef<{
+    initialDistance: number;
+    initialScale: number;
+    centerX: number;
+    centerY: number;
+    lastScale: number;
+  } | null>(null);
+
+  // Track last tap for double-tap detection
+  const lastTap = useRef<{ time: number; x: number; y: number } | null>(null);
+
+  // Sync ref with state
+  useEffect(() => {
+    liveScaleRef.current = scale;
+  }, [scale]);
 
   // Zoom control handlers
   const handleZoomIn = useCallback(() => {
@@ -32,20 +54,9 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
   const handleZoomReset = useCallback(() => {
     setScale(DEFAULT_SCALE);
   }, []);
-  
-  // Track pinch gesture state
-  const pinchState = useRef<{
-    initialDistance: number;
-    initialScale: number;
-    centerX: number;
-    centerY: number;
-  } | null>(null);
-
-  // Track last tap for double-tap detection
-  const lastTap = useRef<{ time: number; x: number; y: number } | null>(null);
 
   // Get distance between two touch points
-  const getTouchDistance = (touches: React.TouchList): number => {
+  const getTouchDistance = (touches: TouchList): number => {
     if (touches.length < 2) return 0;
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
@@ -53,7 +64,7 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
   };
 
   // Get center point of two touches
-  const getTouchCenter = (touches: React.TouchList): { x: number; y: number } => {
+  const getTouchCenter = (touches: TouchList): { x: number; y: number } => {
     if (touches.length < 2) {
       return { x: touches[0].clientX, y: touches[0].clientY };
     }
@@ -63,13 +74,22 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
     };
   };
 
+  // Apply scale directly to DOM for smooth updates (bypasses React)
+  const applyScaleToDOM = useCallback((newScale: number) => {
+    const content = contentRef.current;
+    if (!content) return;
+    content.style.transform = `scale(${newScale})`;
+  }, []);
+
   // Handle double-tap to fit section or toggle zoom
   const handleDoubleTap = useCallback((x: number, y: number) => {
     const container = containerRef.current;
     const content = contentRef.current;
     if (!container || !content) return;
 
-    if (scale === DEFAULT_SCALE) {
+    const currentScale = liveScaleRef.current;
+
+    if (Math.abs(currentScale - DEFAULT_SCALE) < 0.05) {
       // Find the section element under the tap point
       const elementsAtPoint = document.elementsFromPoint(x, y);
       const sectionEl = elementsAtPoint.find(
@@ -86,32 +106,32 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
       if (sectionEl) {
         // Fit the tapped section
         const sectionRect = sectionEl.getBoundingClientRect();
-        const sectionWidth = sectionRect.width / scale; // Get unscaled width
+        const sectionWidth = sectionRect.width / currentScale; // Get unscaled width
         
         // Calculate scale to fit section width with some padding
         const padding = 32;
         newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, (viewportWidth - padding) / sectionWidth));
         
         // Scroll to bring section into view (top-left of section)
-        const sectionOffsetLeft = (sectionRect.left - containerRect.left + container.scrollLeft) / scale;
-        const sectionOffsetTop = (sectionRect.top - containerRect.top + container.scrollTop) / scale;
+        const sectionOffsetLeft = (sectionRect.left - containerRect.left + container.scrollLeft) / currentScale;
+        const sectionOffsetTop = (sectionRect.top - containerRect.top + container.scrollTop) / currentScale;
         
         targetScrollX = sectionOffsetLeft * newScale - padding / 2;
         targetScrollY = sectionOffsetTop * newScale - padding / 2;
       } else {
         // Fallback: fit entire sheet width or zoom to 1.5x at tap point
-        const contentWidth = content.scrollWidth / scale;
+        const contentWidth = content.scrollWidth / currentScale;
         newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, viewportWidth / contentWidth));
         
         // If calculated scale is close to current, just use 1.5x
-        if (Math.abs(newScale - scale) < 0.1) {
+        if (Math.abs(newScale - currentScale) < 0.1) {
           newScale = 1.5;
         }
         
         const relativeX = x - containerRect.left;
         const relativeY = y - containerRect.top;
-        targetScrollX = (relativeX + container.scrollLeft) * newScale / scale - relativeX;
-        targetScrollY = (relativeY + container.scrollTop) * newScale / scale - relativeY;
+        targetScrollX = (relativeX + container.scrollLeft) * newScale / currentScale - relativeX;
+        targetScrollY = (relativeY + container.scrollTop) * newScale / currentScale - relativeY;
       }
       
       setScale(newScale);
@@ -120,76 +140,137 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
       // Reset to default scale
       setScale(DEFAULT_SCALE);
     }
-  }, [scale]);
-
-  // Touch handlers
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      // Start pinch gesture
-      const distance = getTouchDistance(e.touches);
-      const center = getTouchCenter(e.touches);
-      pinchState.current = {
-        initialDistance: distance,
-        initialScale: scale,
-        centerX: center.x,
-        centerY: center.y,
-      };
-    } else if (e.touches.length === 1) {
-      // Check for double tap
-      const now = Date.now();
-      const touch = e.touches[0];
-      
-      if (lastTap.current) {
-        const timeDiff = now - lastTap.current.time;
-        const dx = touch.clientX - lastTap.current.x;
-        const dy = touch.clientY - lastTap.current.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (timeDiff < 300 && distance < 50) {
-          handleDoubleTap(touch.clientX, touch.clientY);
-          lastTap.current = null;
-          return;
-        }
-      }
-      
-      lastTap.current = { time: now, x: touch.clientX, y: touch.clientY };
-    }
-  }, [scale, handleDoubleTap]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2 && pinchState.current) {
-      const distance = getTouchDistance(e.touches);
-      const center = getTouchCenter(e.touches);
-      const container = containerRef.current;
-      
-      if (!container) return;
-      
-      // Calculate new scale
-      const scaleRatio = distance / pinchState.current.initialDistance;
-      let newScale = pinchState.current.initialScale * scaleRatio;
-      newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-      
-      // Calculate scroll adjustment to keep pinch center stable
-      const rect = container.getBoundingClientRect();
-      const relativeX = pinchState.current.centerX - rect.left;
-      const relativeY = pinchState.current.centerY - rect.top;
-      
-      const contentX = (container.scrollLeft + relativeX) / scale;
-      const contentY = (container.scrollTop + relativeY) / scale;
-      
-      setScale(newScale);
-      
-      // Adjust scroll position
-      const newScrollX = contentX * newScale - relativeX;
-      const newScrollY = contentY * newScale - relativeY;
-      
-      container.scrollTo(newScrollX, newScrollY);
-    }
-  }, [scale]);
-
-  const handleTouchEnd = useCallback(() => {
-    pinchState.current = null;
   }, []);
+
+  // Touch handlers using native event listeners for better performance
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        // Prevent default to stop browser zoom
+        e.preventDefault();
+        
+        // Start pinch gesture
+        isPinchingRef.current = true;
+        const distance = getTouchDistance(e.touches);
+        const center = getTouchCenter(e.touches);
+        const currentScale = liveScaleRef.current;
+        
+        pinchState.current = {
+          initialDistance: distance,
+          initialScale: currentScale,
+          centerX: center.x,
+          centerY: center.y,
+          lastScale: currentScale,
+        };
+      } else if (e.touches.length === 1) {
+        // Check for double tap
+        const now = Date.now();
+        const touch = e.touches[0];
+        
+        if (lastTap.current) {
+          const timeDiff = now - lastTap.current.time;
+          const dx = touch.clientX - lastTap.current.x;
+          const dy = touch.clientY - lastTap.current.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (timeDiff < 300 && distance < 50) {
+            e.preventDefault();
+            handleDoubleTap(touch.clientX, touch.clientY);
+            lastTap.current = null;
+            return;
+          }
+        }
+        
+        lastTap.current = { time: now, x: touch.clientX, y: touch.clientY };
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchState.current && isPinchingRef.current) {
+        e.preventDefault();
+        
+        const distance = getTouchDistance(e.touches);
+        
+        // Cancel any pending animation frame
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        
+        // Use requestAnimationFrame for smooth updates
+        animationFrameRef.current = requestAnimationFrame(() => {
+          if (!pinchState.current || !container) return;
+          
+          // Calculate new scale
+          const scaleRatio = distance / pinchState.current.initialDistance;
+          let newScale = pinchState.current.initialScale * scaleRatio;
+          newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+          
+          // Skip update if scale hasn't changed significantly (reduces jitter)
+          if (Math.abs(newScale - pinchState.current.lastScale) < 0.001) {
+            return;
+          }
+          
+          const oldScale = pinchState.current.lastScale;
+          pinchState.current.lastScale = newScale;
+          liveScaleRef.current = newScale;
+          
+          // Apply scale directly to DOM for instant visual feedback
+          applyScaleToDOM(newScale);
+          
+          // Calculate scroll adjustment to keep pinch center stable
+          const rect = container.getBoundingClientRect();
+          const relativeX = pinchState.current.centerX - rect.left;
+          const relativeY = pinchState.current.centerY - rect.top;
+          
+          const contentX = (container.scrollLeft + relativeX) / oldScale;
+          const contentY = (container.scrollTop + relativeY) / oldScale;
+          
+          // Adjust scroll position
+          const newScrollX = contentX * newScale - relativeX;
+          const newScrollY = contentY * newScale - relativeY;
+          
+          container.scrollTo(newScrollX, newScrollY);
+        });
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (isPinchingRef.current && pinchState.current) {
+        // Cancel any pending animation frame
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        
+        // Commit final scale to React state
+        const finalScale = liveScaleRef.current;
+        setScale(finalScale);
+        
+        isPinchingRef.current = false;
+        pinchState.current = null;
+      }
+    };
+
+    // Use passive: false to allow preventDefault
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+    container.addEventListener("touchcancel", handleTouchEnd);
+    
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchEnd);
+      
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [handleDoubleTap, applyScaleToDOM]);
 
   // Handle wheel zoom (desktop)
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -202,13 +283,14 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
       const relativeX = e.clientX - rect.left;
       const relativeY = e.clientY - rect.top;
       
+      const currentScale = liveScaleRef.current;
       const delta = -e.deltaY * 0.001;
-      let newScale = scale * (1 + delta);
+      let newScale = currentScale * (1 + delta);
       newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
       
       // Keep pointer position stable
-      const contentX = (container.scrollLeft + relativeX) / scale;
-      const contentY = (container.scrollTop + relativeY) / scale;
+      const contentX = (container.scrollLeft + relativeX) / currentScale;
+      const contentY = (container.scrollTop + relativeY) / currentScale;
       
       setScale(newScale);
       
@@ -217,7 +299,7 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
       
       container.scrollTo(newScrollX, newScrollY);
     }
-  }, [scale]);
+  }, []);
 
   // Attach wheel listener
   useEffect(() => {
@@ -235,10 +317,10 @@ export function SpreadsheetContainer({ children, className }: SpreadsheetContain
         "relative overflow-auto",
         className
       )}
-      style={{ WebkitOverflowScrolling: "touch" }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      style={{ 
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x pan-y", // Allow scrolling but let our code handle pinch
+      }}
     >
       {/* Sizer div reflects scaled content size for proper scrollbars */}
       <div

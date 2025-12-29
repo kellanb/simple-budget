@@ -94,6 +94,7 @@ export default defineSchema({
         v.literal("quarterly"),
         v.literal("biannual"),
         v.literal("annual"),
+        v.literal("irregular"),
       ),
     ),
     originalAmountCents: v.optional(v.number()), // Pre-normalized amount

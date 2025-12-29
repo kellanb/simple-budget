@@ -11,58 +11,58 @@ export type ColumnConfig = {
 
 // Income columns: Label, Monthly Total (canonical), Each Paycheck (derived = monthly ÷ 2)
 export const incomeColumns: ColumnConfig[] = [
-  { key: "label", label: "Income Source", width: "min-w-[180px]", align: "left", editable: true },
-  { key: "amountCents", label: "Monthly Total", width: "min-w-[120px]", align: "right", editable: true },
-  { key: "eachPaycheck", label: "Each Paycheck", width: "min-w-[120px]", align: "right", derived: true },
+  { key: "label", label: "Income Source", width: "w-[180px]", align: "left", editable: true },
+  { key: "amountCents", label: "Monthly Total", width: "w-[120px]", align: "right", editable: true },
+  { key: "eachPaycheck", label: "Each Paycheck", width: "w-[120px]", align: "right", derived: true },
 ];
 
 // Monthly Bills columns: Payment To, Due Date, Amount, Payment Source
 export const monthlyBillsColumns: ColumnConfig[] = [
-  { key: "label", label: "Payment To", width: "min-w-[180px]", align: "left", editable: true },
-  { key: "dueDate", label: "Due Date", width: "min-w-[100px]", align: "center", editable: true },
-  { key: "amountCents", label: "Amount", width: "min-w-[120px]", align: "right", editable: true },
-  { key: "paymentSource", label: "Payment Source", width: "min-w-[140px]", align: "left", editable: true },
+  { key: "label", label: "Payment To", width: "w-[180px]", align: "left", editable: true },
+  { key: "dueDate", label: "Due Date", width: "w-[100px]", align: "center", editable: true },
+  { key: "amountCents", label: "Amount", width: "w-[120px]", align: "right", editable: true },
+  { key: "paymentSource", label: "Payment Source", width: "w-[140px]", align: "left", editable: true },
 ];
 
 // Non-Monthly Bills columns: Payment To, Due Date, Amount, Monthly Amount, Payment Source
 // Note: Frequency is represented via subsections (Quarterly, Bi-Annual, Annual)
 export const nonMonthlyBillsColumns: ColumnConfig[] = [
-  { key: "label", label: "Payment To", width: "min-w-[180px]", align: "left", editable: true },
-  { key: "dueDate", label: "Due Date", width: "min-w-[140px]", align: "center", editable: true },
-  { key: "originalAmountCents", label: "Amount", width: "min-w-[110px]", align: "right", editable: true },
-  { key: "amountCents", label: "Monthly", width: "min-w-[110px]", align: "right", derived: true },
-  { key: "paymentSource", label: "Payment Source", width: "min-w-[140px]", align: "left", editable: true },
+  { key: "label", label: "Payment To", width: "w-[180px]", align: "left", editable: true },
+  { key: "dueDate", label: "Due Date", width: "w-[140px]", align: "center", editable: true },
+  { key: "originalAmountCents", label: "Amount", width: "w-[110px]", align: "right", editable: true },
+  { key: "amountCents", label: "Monthly", width: "w-[110px]", align: "right", derived: true },
+  { key: "paymentSource", label: "Payment Source", width: "w-[140px]", align: "left", editable: true },
 ];
 
 // Debt columns: Owed To, Balance, Interest Rate, Monthly Payment, Payment Date, Payment Source
 export const debtColumns: ColumnConfig[] = [
-  { key: "label", label: "Owed To", width: "min-w-[160px]", align: "left", editable: true },
-  { key: "balanceCents", label: "Balance", width: "min-w-[120px]", align: "right", editable: true },
-  { key: "interestRate", label: "Interest", width: "min-w-[90px]", align: "right", editable: true },
-  { key: "amountCents", label: "Monthly", width: "min-w-[110px]", align: "right", editable: true },
-  { key: "dueDate", label: "Date", width: "min-w-[80px]", align: "center", editable: true },
-  { key: "paymentSource", label: "Source", width: "min-w-[120px]", align: "left", editable: true },
+  { key: "label", label: "Owed To", width: "w-[160px]", align: "left", editable: true },
+  { key: "balanceCents", label: "Balance", width: "w-[120px]", align: "right", editable: true },
+  { key: "interestRate", label: "Interest", width: "w-[90px]", align: "right", editable: true },
+  { key: "amountCents", label: "Monthly", width: "w-[110px]", align: "right", editable: true },
+  { key: "dueDate", label: "Date", width: "w-[80px]", align: "center", editable: true },
+  { key: "paymentSource", label: "Source", width: "w-[120px]", align: "left", editable: true },
 ];
 
 // Savings columns: Allocate To, Current Amount, Goal Amount, Start Month, End Month, Months for Goal, Monthly, Bi-Monthly
 export const savingsColumns: ColumnConfig[] = [
-  { key: "label", label: "Allocate To", width: "min-w-[160px]", align: "left", editable: true },
-  { key: "currentAmountCents", label: "Current", width: "min-w-[110px]", align: "right", editable: true },
-  { key: "goalAmountCents", label: "Goal", width: "min-w-[110px]", align: "right", editable: true },
-  { key: "startMonth", label: "Start", width: "min-w-[90px]", align: "center", editable: true },
-  { key: "endMonth", label: "End", width: "min-w-[90px]", align: "center", editable: true },
-  { key: "monthsForGoal", label: "Months", width: "min-w-[70px]", align: "center", derived: true },
-  { key: "amountCents", label: "Monthly", width: "min-w-[100px]", align: "right", derived: true },
-  { key: "biMonthly", label: "Bi-Mo", width: "min-w-[100px]", align: "right", derived: true },
+  { key: "label", label: "Allocate To", width: "w-[160px]", align: "left", editable: true },
+  { key: "currentAmountCents", label: "Current", width: "w-[110px]", align: "right", editable: true },
+  { key: "goalAmountCents", label: "Goal", width: "w-[110px]", align: "right", editable: true },
+  { key: "startMonth", label: "Start", width: "w-[90px]", align: "center", editable: true },
+  { key: "endMonth", label: "End", width: "w-[90px]", align: "center", editable: true },
+  { key: "monthsForGoal", label: "Months", width: "w-[70px]", align: "center", derived: true },
+  { key: "amountCents", label: "Monthly", width: "w-[100px]", align: "right", derived: true },
+  { key: "biMonthly", label: "Bi-Mo", width: "w-[100px]", align: "right", derived: true },
 ];
 
 // Investments columns: Allocate To, Monthly, Bi-Monthly, Date, % of Total Income
 export const investmentsColumns: ColumnConfig[] = [
-  { key: "label", label: "Allocate To", width: "min-w-[160px]", align: "left", editable: true },
-  { key: "amountCents", label: "Monthly", width: "min-w-[110px]", align: "right", editable: true },
-  { key: "biMonthly", label: "Bi-Mo", width: "min-w-[100px]", align: "right", derived: true },
-  { key: "paymentDay", label: "Date", width: "min-w-[80px]", align: "center", editable: true },
-  { key: "percentOfIncome", label: "% Income", width: "min-w-[90px]", align: "right", derived: true },
+  { key: "label", label: "Allocate To", width: "w-[160px]", align: "left", editable: true },
+  { key: "amountCents", label: "Monthly", width: "w-[110px]", align: "right", editable: true },
+  { key: "biMonthly", label: "Bi-Mo", width: "w-[100px]", align: "right", derived: true },
+  { key: "paymentDay", label: "Date", width: "w-[80px]", align: "center", editable: true },
+  { key: "percentOfIncome", label: "% Income", width: "w-[90px]", align: "right", derived: true },
 ];
 
 // Map section key to column config

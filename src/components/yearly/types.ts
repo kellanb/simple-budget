@@ -1,7 +1,7 @@
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { YearlySectionKey, YearlySubsectionSectionKey } from "@/lib/yearly-constants";
 
-export type Frequency = "monthly" | "quarterly" | "biannual" | "annual";
+export type Frequency = "monthly" | "quarterly" | "biannual" | "annual" | "irregular";
 
 export type YearlyLineItem = {
   _id: Id<"yearlyLineItems">;

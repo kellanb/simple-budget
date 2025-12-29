@@ -555,7 +555,7 @@ export default function YearlyPage() {
           onDragCancel={handleDragCancel}
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
         >
-          <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+          <div className="mx-auto max-w-6xl px-4 py-6 pb-48 space-y-6">
             {/* Error banner */}
             {error && (
               <div className={cn(
@@ -575,7 +575,7 @@ export default function YearlyPage() {
             )}
 
             {/* Year selector */}
-            <div className="flex items-center justify-center">
+            <div className="flex items-center justify-start">
               <YearSelector year={selectedYear} onChange={setSelectedYear} />
             </div>
 

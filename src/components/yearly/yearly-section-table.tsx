@@ -11,6 +11,21 @@ import { getColumnsForSection, sectionColors, sectionTitles } from "./column-def
 import { SortableLineItemRow } from "./yearly-line-item-row";
 import { SortableSubsection } from "./yearly-subsection";
 
+// Helper to convert Tailwind width class to CSS width value
+function getColumnWidth(tailwindClass: string): string {
+  // Extract the value from w-[XXXpx] pattern
+  const match = tailwindClass.match(/w-\[(\d+)px\]/);
+  if (match) {
+    return `${match[1]}px`;
+  }
+  // Handle standard Tailwind widths
+  const standardWidths: Record<string, string> = {
+    "w-11": "44px",
+    "w-20": "80px",
+  };
+  return standardWidths[tailwindClass] || "auto";
+}
+
 type YearlySectionTableProps = {
   sectionKey: YearlySectionKey;
   sectionItems: YearlyLineItem[]; // Items at section level (no subsection)
@@ -68,18 +83,25 @@ export function YearlySectionTable({
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px]">
+        <table className="w-full min-w-[600px] table-fixed">
+          {/* Define column widths for consistent alignment - use inline styles for <col> elements */}
+          <colgroup>
+            <col style={{ width: "44px" }} />
+            {columns.map((col) => (
+              <col key={col.key} style={{ width: getColumnWidth(col.width) }} />
+            ))}
+            <col style={{ width: "80px" }} />
+          </colgroup>
           {/* Column headers */}
           <thead>
             <tr className="border-b border-zinc-300 dark:border-zinc-600 bg-zinc-50/80 dark:bg-zinc-800/50">
-              {/* Drag handle column - 44px for touch targets */}
-              <th className="w-11" />
+              {/* Drag handle column */}
+              <th />
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
-                    "px-3 py-2.5 text-xs font-bold uppercase tracking-wider whitespace-nowrap",
-                    col.width,
+                    "px-3 py-2.5 text-xs font-bold uppercase tracking-wider",
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
                     "text-zinc-700 dark:text-zinc-300"
@@ -89,7 +111,7 @@ export function YearlySectionTable({
                 </th>
               ))}
               {/* Actions column */}
-              <th className="w-20" />
+              <th />
             </tr>
           </thead>
 
@@ -132,7 +154,7 @@ export function YearlySectionTable({
           {/* Add subsection button */}
           <tbody>
             <tr className="border-t border-zinc-100 dark:border-zinc-800">
-              <td className="w-11" />
+              <td />
               <td colSpan={columns.length} className="px-3 py-2">
                 <button
                   onClick={onAddSubsection}
@@ -146,14 +168,14 @@ export function YearlySectionTable({
                   Add subsection
                 </button>
               </td>
-              <td className="w-20" />
+              <td />
             </tr>
           </tbody>
 
           {/* Section footer with totals */}
           <tfoot>
             <tr className={cn("border-t-2", colors.border, colors.bg)}>
-              <td className="w-11" />
+              <td />
               <td
                 colSpan={columns.length}
                 className="px-3 py-3"
@@ -172,7 +194,7 @@ export function YearlySectionTable({
                   </div>
                 </div>
               </td>
-              <td className="w-20" />
+              <td />
             </tr>
           </tfoot>
         </table>
@@ -220,7 +242,7 @@ function DroppableSectionItems({
       ))}
       {/* Add section-level item button */}
       <tr>
-        <td className="w-11" />
+        <td />
         <td colSpan={columns.length} className="px-3 py-2">
           <button
             onClick={onAddSectionItem}
@@ -234,7 +256,7 @@ function DroppableSectionItems({
             Add item
           </button>
         </td>
-        <td className="w-20" />
+        <td />
       </tr>
     </tbody>
   );

@@ -74,7 +74,7 @@ export function YearlySubsection({
         {/* Subsection header row */}
         <tr className="bg-zinc-100 dark:bg-zinc-800/80 border-t border-zinc-200 dark:border-zinc-700">
           {/* Drag handle - 44px minimum touch target for mobile */}
-          <td className="w-11 px-0">
+          <td className="px-0">
             <button
               className={cn(
                 "flex h-11 w-11 items-center justify-center cursor-grab active:cursor-grabbing touch-none",
@@ -122,7 +122,7 @@ export function YearlySubsection({
               </span>
             </div>
           </td>
-          <td className="w-20" />
+          <td />
         </tr>
 
         {/* Subsection items */}
@@ -139,7 +139,7 @@ export function YearlySubsection({
 
         {/* Add item row */}
         <tr>
-          <td className="w-11" />
+          <td />
           <td colSpan={columns.length} className="px-3 py-2">
             <button
               onClick={onAddItem}
@@ -153,7 +153,7 @@ export function YearlySubsection({
               Add item
             </button>
           </td>
-          <td className="w-20" />
+          <td />
         </tr>
       </tbody>
     </SortableContext>
@@ -225,9 +225,10 @@ function calculateSubsectionTotal(items: YearlyLineItem[], sectionKey: YearlySec
       return formatCurrency(total);
     }
     case "nonMonthlyBills": {
-      // Show monthly equivalent
+      // Show monthly equivalent (skip irregular items - they can't be calculated)
       const monthlyEq = items.reduce((acc, item) => {
         const freq = item.frequency ?? "monthly";
+        if (freq === "irregular") return acc; // Skip irregular - no monthly calculation
         const original = item.originalAmountCents ?? item.amountCents;
         const paymentsPerYear: Record<string, number> = {
           monthly: 12,

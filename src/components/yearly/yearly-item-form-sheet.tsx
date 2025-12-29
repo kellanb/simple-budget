@@ -31,6 +31,7 @@ const frequencyOptions: { value: Frequency; label: string }[] = [
   { value: "quarterly", label: "Quarterly" },
   { value: "biannual", label: "Bi-Annual" },
   { value: "annual", label: "Annual" },
+  { value: "irregular", label: "Irregular (N/A)" },
 ];
 
 export function YearlyItemFormSheet({
@@ -71,11 +72,13 @@ export function YearlyItemFormSheet({
     if (!currentForm.label.trim()) return;
 
     // Auto-calculate amountCents for non-monthly bills from originalAmountCents + frequency
+    // For "irregular" frequency, we set amountCents to 0 (no monthly calculation)
     let formToSubmit = currentForm;
     if (sectionKey === "nonMonthlyBills" && currentForm.originalAmountCents !== undefined) {
       const frequency = currentForm.frequency ?? "quarterly";
       const monthlyAmount = monthlyEquivalentFromOriginal(currentForm.originalAmountCents, frequency);
-      formToSubmit = { ...currentForm, amountCents: monthlyAmount };
+      // If irregular, monthlyAmount is null - set to 0 to indicate no monthly calculation
+      formToSubmit = { ...currentForm, amountCents: monthlyAmount ?? 0 };
     }
 
     setIsSubmitting(true);

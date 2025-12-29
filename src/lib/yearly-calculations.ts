@@ -1,5 +1,5 @@
 // Type definitions for yearly calculations
-export type Frequency = "monthly" | "quarterly" | "biannual" | "annual";
+export type Frequency = "monthly" | "quarterly" | "biannual" | "annual" | "irregular";
 
 export type YearlyLineItem = {
   _id: string;
@@ -55,7 +55,8 @@ export type IncomeBreakdown = {
 };
 
 // Convert non-monthly to monthly equivalent
-export function paymentsPerYear(frequency: Frequency): number {
+// Returns null for irregular frequency (no monthly calculation possible)
+export function paymentsPerYear(frequency: Frequency): number | null {
   switch (frequency) {
     case "monthly":
       return 12;
@@ -65,23 +66,31 @@ export function paymentsPerYear(frequency: Frequency): number {
       return 2;
     case "annual":
       return 1;
+    case "irregular":
+      return null; // Cannot calculate monthly - unpredictable frequency
   }
 }
 
 // Non-monthly: user enters `originalAmountCents` as the amount billed per period (quarter/half-year/year).
+// Returns null for irregular frequency (cannot calculate annual total)
 export function annualTotalFromOriginal(
   originalAmountCents: number,
   frequency: Frequency
-): number {
-  return originalAmountCents * paymentsPerYear(frequency);
+): number | null {
+  const payments = paymentsPerYear(frequency);
+  if (payments === null) return null; // Irregular - cannot calculate
+  return originalAmountCents * payments;
 }
 
+// Returns null for irregular frequency (cannot calculate monthly equivalent)
 export function monthlyEquivalentFromOriginal(
   originalAmountCents: number,
   frequency: Frequency
-): number {
+): number | null {
   // Example: quarterly -> amount * 4 / 12, biannual -> amount * 2 / 12, annual -> amount * 1 / 12
-  return Math.round(annualTotalFromOriginal(originalAmountCents, frequency) / 12);
+  const annual = annualTotalFromOriginal(originalAmountCents, frequency);
+  if (annual === null) return null; // Irregular - cannot calculate
+  return Math.round(annual / 12);
 }
 
 // Parse month+year strings like "Jan 2026" or "January 2026"
@@ -178,8 +187,11 @@ export function computeSectionTotals(items: YearlyLineItem[]): SectionTotals {
       case "nonMonthlyBills": {
         const freq = item.frequency ?? "monthly";
         const original = item.originalAmountCents ?? item.amountCents;
-        nonMonthlyBillsAnnualTotal += annualTotalFromOriginal(original, freq);
-        nonMonthlyBillsMonthlyEq += monthlyEquivalentFromOriginal(original, freq);
+        const annual = annualTotalFromOriginal(original, freq);
+        const monthly = monthlyEquivalentFromOriginal(original, freq);
+        // Skip irregular frequency items (cannot calculate monthly/annual)
+        if (annual !== null) nonMonthlyBillsAnnualTotal += annual;
+        if (monthly !== null) nonMonthlyBillsMonthlyEq += monthly;
         break;
       }
 
