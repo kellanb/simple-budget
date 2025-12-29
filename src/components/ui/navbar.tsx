@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme/theme-context";
 import { Button } from "./button";
@@ -48,7 +49,7 @@ export function Navbar({ items, onSignOut }: NavbarProps) {
             {/* Desktop navigation */}
             <div className="hidden items-center gap-1 md:flex">
               {items.map((item) => (
-                <a
+                <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
@@ -59,7 +60,7 @@ export function Navbar({ items, onSignOut }: NavbarProps) {
                   )}
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
               <div className="ml-2 h-6 w-px bg-zinc-200 dark:bg-zinc-700" />
               <Button
@@ -130,7 +131,7 @@ export function Navbar({ items, onSignOut }: NavbarProps) {
             <div className="flex-1 overflow-y-auto px-8 py-12">
               <nav className="flex flex-col gap-2">
                 {items.map((item) => (
-                  <a
+                  <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
@@ -142,7 +143,7 @@ export function Navbar({ items, onSignOut }: NavbarProps) {
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     {item.label}
-                  </a>
+                  </Link>
                 ))}
                 
                 <div className="my-4 h-px bg-zinc-200 dark:bg-zinc-800" />

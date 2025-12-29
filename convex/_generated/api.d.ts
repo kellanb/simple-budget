@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as months from "../months.js";
 import type * as transactions from "../transactions.js";
 import type * as utils from "../utils.js";
+import type * as yearly from "../yearly.js";
 
 import type {
   ApiFromModules,
@@ -24,6 +25,7 @@ declare const fullApi: ApiFromModules<{
   months: typeof months;
   transactions: typeof transactions;
   utils: typeof utils;
+  yearly: typeof yearly;
 }>;
 
 /**

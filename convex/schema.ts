@@ -48,5 +48,74 @@ export default defineSchema({
   })
     .index("by_month_order", ["monthId", "order"])
     .index("by_user", ["userId"]),
+
+  // Yearly Forecast tables
+  yearlySubsections: defineTable({
+    userId: v.id("users"),
+    year: v.number(),
+    sectionKey: v.union(
+      v.literal("monthlyBills"),
+      v.literal("nonMonthlyBills"),
+      v.literal("debt"),
+      v.literal("savings"),
+      v.literal("investments"),
+    ),
+    title: v.string(),
+    order: v.number(),
+  })
+    .index("by_user_and_year_and_sectionKey", ["userId", "year", "sectionKey"])
+    .index("by_user_and_year", ["userId", "year"]),
+
+  yearlyLineItems: defineTable({
+    userId: v.id("users"),
+    year: v.number(),
+    sectionKey: v.union(
+      v.literal("income"),
+      v.literal("monthlyBills"),
+      v.literal("nonMonthlyBills"),
+      v.literal("debt"),
+      v.literal("savings"),
+      v.literal("investments"),
+    ),
+    // Optional: items can exist at the section level (no subsection) or inside a subsection.
+    // Constraint: income items must not have a subsectionId.
+    subsectionId: v.optional(v.id("yearlySubsections")),
+    label: v.string(),
+    amountCents: v.number(), // Canonical monthly amount for totals (0 allowed for placeholder rows)
+    order: v.number(),
+    // Display fields
+    note: v.optional(v.string()),
+    paymentSource: v.optional(v.string()),
+    dueDate: v.optional(v.string()),
+    // Non-monthly normalization
+    frequency: v.optional(
+      v.union(
+        v.literal("monthly"),
+        v.literal("quarterly"),
+        v.literal("biannual"),
+        v.literal("annual"),
+      ),
+    ),
+    originalAmountCents: v.optional(v.number()), // Pre-normalized amount
+    // Debt fields
+    balanceCents: v.optional(v.number()),
+    interestRate: v.optional(v.number()),
+    // Savings fields
+    goalAmountCents: v.optional(v.number()),
+    currentAmountCents: v.optional(v.number()),
+    // Month+year strings (sheet-like): e.g. "Jan 2026", "Dec 2027"
+    startMonth: v.optional(v.string()),
+    endMonth: v.optional(v.string()),
+    // Investments fields (bi-monthly is derived as amountCents / 2, but we store paymentDay separately)
+    paymentDay: v.optional(v.string()), // e.g. "16th" - day of month for investment contributions
+  })
+    .index("by_subsection_and_order", ["subsectionId", "order"])
+    .index("by_user_year_sectionKey_order", [
+      "userId",
+      "year",
+      "sectionKey",
+      "order",
+    ])
+    .index("by_user_and_year", ["userId", "year"]),
 });
 
