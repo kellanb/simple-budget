@@ -43,6 +43,7 @@ const frequencyValidator = v.union(
   v.literal("quarterly"),
   v.literal("biannual"),
   v.literal("annual"),
+  v.literal("irregular"),
 );
 
 // ============================================================================
