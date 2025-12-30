@@ -31,7 +31,7 @@ const frequencyOptions: { value: Frequency; label: string }[] = [
   { value: "quarterly", label: "Quarterly" },
   { value: "biannual", label: "Bi-Annual" },
   { value: "annual", label: "Annual" },
-  { value: "irregular", label: "Irregular (N/A)" },
+  { value: "irregular", label: "N/A" },
 ];
 
 export function YearlyItemFormSheet({

@@ -278,6 +278,8 @@ function computeSectionTotal(
       let monthlyEq = 0;
       for (const item of items) {
         const freq = item.frequency ?? "monthly";
+        // Skip irregular frequency items - they can't be calculated for monthly/annual totals
+        if (freq === "irregular") continue;
         const original = item.originalAmountCents ?? item.amountCents;
         const perYear: Record<string, number> = { monthly: 12, quarterly: 4, biannual: 2, annual: 1 };
         const annual = original * perYear[freq];
