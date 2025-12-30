@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { YearlyLineItem, YearlySectionKey, LineItemFormValues, Frequency } from "./types";
-import { monthlyEquivalentFromOriginal } from "@/lib/yearly-calculations";
+import { monthlyEquivalentFromOriginal, type SectionTotals, formatCurrency } from "@/lib/yearly-calculations";
+
+type GoalType = "custom" | "6months" | "12months";
 
 type YearlyItemFormSheetProps = {
   open: boolean;
@@ -15,6 +17,7 @@ type YearlyItemFormSheetProps = {
   onDelete?: () => Promise<void>;
   item: YearlyLineItem | null;
   sectionKey: YearlySectionKey;
+  sectionTotals?: SectionTotals;
 };
 
 // Form field configs per section
@@ -41,12 +44,28 @@ export function YearlyItemFormSheet({
   onDelete,
   item,
   sectionKey,
+  sectionTotals,
 }: YearlyItemFormSheetProps) {
   const [form, setForm] = useState<LineItemFormValues>(() => getDefaultValues(item, sectionKey));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [goalType, setGoalType] = useState<GoalType>("custom");
   
   // Use ref to track current form values synchronously (avoids async state issues)
   const formRef = useRef<LineItemFormValues>(form);
+
+  // Calculate emergency fund goal amounts (6 and 12 months of expenses)
+  // Formula: (Monthly Bills + Debt Payment) * months + Non-Monthly Annual Total
+  const calculatedGoals = useMemo(() => {
+    if (!sectionTotals) return { sixMonths: 0, twelveMonths: 0 };
+    
+    const monthlyExpenses = sectionTotals.monthlyBillsMonthly + sectionTotals.debtMonthlyPayment;
+    const nonMonthlyAnnual = sectionTotals.nonMonthlyBillsAnnualTotal;
+    
+    return {
+      sixMonths: (monthlyExpenses * 6) + nonMonthlyAnnual,
+      twelveMonths: (monthlyExpenses * 12) + nonMonthlyAnnual,
+    };
+  }, [sectionTotals]);
 
   // Reset form when item changes
   useEffect(() => {
@@ -54,8 +73,22 @@ export function YearlyItemFormSheet({
       const defaults = getDefaultValues(item, sectionKey);
       setForm(defaults);
       formRef.current = defaults;
+      
+      // Determine goal type based on existing value
+      if (item?.goalAmountCents && sectionKey === "savings" && sectionTotals) {
+        const goal = item.goalAmountCents;
+        if (goal === calculatedGoals.sixMonths) {
+          setGoalType("6months");
+        } else if (goal === calculatedGoals.twelveMonths) {
+          setGoalType("12months");
+        } else {
+          setGoalType("custom");
+        }
+      } else {
+        setGoalType("custom");
+      }
     }
-  }, [open, item, sectionKey]);
+  }, [open, item, sectionKey, sectionTotals, calculatedGoals]);
 
   // Update ref immediately (synchronous) and also update state for re-render
   const updateForm = (updater: (prev: LineItemFormValues) => LineItemFormValues) => {
@@ -185,12 +218,19 @@ export function YearlyItemFormSheet({
           )}
 
           {fields.includes("interestRate") && (
-            <FormField
-              label="Interest Rate (%)"
-              value={form.interestRate?.toString() ?? ""}
-              onChange={(v) => updateForm((f) => ({ ...f, interestRate: v ? parseFloat(v) : undefined }))}
-              placeholder="e.g., 4.5"
-            />
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                Interest Rate (%)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                value={form.interestRate?.toString() ?? ""}
+                onChange={(e) => updateForm((f) => ({ ...f, interestRate: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                placeholder="e.g., 4.5"
+              />
+            </div>
           )}
 
           {fields.includes("currentAmountCents") && (
@@ -202,11 +242,92 @@ export function YearlyItemFormSheet({
           )}
 
           {fields.includes("goalAmountCents") && (
-            <CurrencyField
-              label="Goal Amount"
-              cents={form.goalAmountCents ?? 0}
-              onChangeCents={(cents) => updateForm((f) => ({ ...f, goalAmountCents: cents }))}
-            />
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                Goal Amount
+              </label>
+              
+              {/* Goal type selector */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalType("custom");
+                  }}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                    goalType === "custom"
+                      ? "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                  )}
+                >
+                  Custom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalType("6months");
+                    updateForm((f) => ({ ...f, goalAmountCents: calculatedGoals.sixMonths }));
+                  }}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                    goalType === "6months"
+                      ? "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                  )}
+                >
+                  6 Mo. Expenses
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalType("12months");
+                    updateForm((f) => ({ ...f, goalAmountCents: calculatedGoals.twelveMonths }));
+                  }}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                    goalType === "12months"
+                      ? "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                  )}
+                >
+                  12 Mo. Expenses
+                </button>
+              </div>
+
+              {/* Show calculated amounts for reference */}
+              {goalType !== "custom" && sectionTotals && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {goalType === "6months" 
+                    ? `Based on: (${formatCurrency(sectionTotals.monthlyBillsMonthly)} bills + ${formatCurrency(sectionTotals.debtMonthlyPayment)} debt) × 6 + ${formatCurrency(sectionTotals.nonMonthlyBillsAnnualTotal)} non-monthly`
+                    : `Based on: (${formatCurrency(sectionTotals.monthlyBillsMonthly)} bills + ${formatCurrency(sectionTotals.debtMonthlyPayment)} debt) × 12 + ${formatCurrency(sectionTotals.nonMonthlyBillsAnnualTotal)} non-monthly`
+                  }
+                </p>
+              )}
+
+              {/* Currency input - only editable when custom */}
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                {goalType === "custom" ? (
+                  <Input
+                    value={form.goalAmountCents ? centsToDisplay(form.goalAmountCents) : ""}
+                    onChange={(e) => {
+                      const cents = toCents(e.target.value);
+                      updateForm((f) => ({ ...f, goalAmountCents: cents }));
+                    }}
+                    inputMode="decimal"
+                    className="pl-7"
+                    placeholder="0.00"
+                  />
+                ) : (
+                  <Input
+                    value={centsToDisplay(form.goalAmountCents ?? 0)}
+                    readOnly
+                    className="pl-7 bg-zinc-50 dark:bg-zinc-800/50 cursor-not-allowed"
+                  />
+                )}
+              </div>
+            </div>
           )}
 
           {fields.includes("startMonth") && (

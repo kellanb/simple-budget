@@ -72,9 +72,9 @@ export function YearlySubsection({
         )}
       >
         {/* Subsection header row */}
-        <tr className="bg-zinc-100 dark:bg-zinc-800/80 border-t border-zinc-200 dark:border-zinc-700">
+        <tr className="bg-zinc-100 dark:bg-zinc-800/80 border-t border-b border-zinc-200 dark:border-zinc-700">
           {/* Drag handle - 44px minimum touch target for mobile */}
-          <td className="px-0">
+          <td className="px-0 border-r border-zinc-200 dark:border-zinc-700">
             <button
               className={cn(
                 "flex h-11 w-11 items-center justify-center cursor-grab active:cursor-grabbing touch-none",
@@ -89,7 +89,7 @@ export function YearlySubsection({
           </td>
           <td
             colSpan={columns.length}
-            className="px-3 py-2"
+            className="px-3 py-2 border-r border-zinc-200 dark:border-zinc-700"
           >
             <div className="flex items-center gap-2">
               <span className="font-bold text-zinc-800 dark:text-zinc-100">
@@ -138,8 +138,8 @@ export function YearlySubsection({
         ))}
 
         {/* Add item row */}
-        <tr>
-          <td />
+        <tr className="border-b border-zinc-100 dark:border-zinc-800">
+          <td className="border-r border-zinc-100 dark:border-zinc-800" />
           <td colSpan={columns.length} className="px-3 py-2">
             <button
               onClick={onAddItem}
@@ -153,7 +153,7 @@ export function YearlySubsection({
               Add item
             </button>
           </td>
-          <td />
+          <td className="border-l border-zinc-100 dark:border-zinc-800" />
         </tr>
       </tbody>
     </SortableContext>

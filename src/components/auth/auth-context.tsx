@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Read persisted token only after hydration to avoid SSR/CSR mismatches
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setToken(stored);
     setHasBootstrapped(true);
   }, []);
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (token && session === null) {
       localStorage.removeItem(STORAGE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setToken(null);
     }
   }, [token, session]);

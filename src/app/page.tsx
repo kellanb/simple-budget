@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/refs */
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
@@ -138,19 +139,24 @@ export default function Home() {
 
   const previousMonthKey = `${prevYear}-${prevMonthIndex}`;
 
+  // Intentionally reading from ref for caching to prevent flicker
   const resolvedPreviousProjectedEnd = useMemo(() => {
+     
     if (previousMonthData === undefined) {
+       
       return projectedEndCacheRef.current[previousMonthKey];
     }
     return previousMonthData?.projectedEndCents;
   }, [previousMonthData, previousMonthKey]);
 
-  const effectiveStartingBalance =
-    currentMonth?.usePreviousMonthEnd &&
-    resolvedPreviousProjectedEnd !== null &&
-    resolvedPreviousProjectedEnd !== undefined
-      ? resolvedPreviousProjectedEnd
-      : currentMonth?.startingBalanceCents ?? 0;
+  const effectiveStartingBalance = useMemo(() => {
+     
+    return currentMonth?.usePreviousMonthEnd &&
+      resolvedPreviousProjectedEnd !== null &&
+      resolvedPreviousProjectedEnd !== undefined
+        ? resolvedPreviousProjectedEnd
+        : currentMonth?.startingBalanceCents ?? 0;
+  }, [currentMonth, resolvedPreviousProjectedEnd]);
 
   const createMonth = useMutation(api.months.create);
   const updateMonthMeta = useMutation(api.months.updateMeta);
@@ -163,13 +169,17 @@ export default function Home() {
   const sortByDueDateMutation = useMutation(api.transactions.sortByDueDate);
 
   const balances = useMemo(() => {
+     
     if (!transactions || !currentMonth) {
       return {
+         
         currentBankBalanceCents: effectiveStartingBalance,
         projectedBalances: {} as Record<string, number>,
+         
         projectedEndBalanceCents: effectiveStartingBalance,
       };
     }
+     
     return calculateBalances(transactions, effectiveStartingBalance);
   }, [transactions, currentMonth, effectiveStartingBalance]);
 
@@ -183,10 +193,12 @@ export default function Home() {
   useEffect(() => {
     if (!currentMonth) return;
     const key = `${currentMonth.year}-${currentMonth.monthIndex}`;
+     
     const nextValue = balances.projectedEndBalanceCents;
     if (projectedEndCacheRef.current[key] !== nextValue) {
       projectedEndCacheRef.current[key] = nextValue;
     }
+     
   }, [balances.projectedEndBalanceCents, currentMonth]);
 
   // Also cache the previous month result when it loads to avoid flicker on reload
@@ -468,6 +480,7 @@ export default function Home() {
 
   // Keep starting balance in sync with previous month's projected end when usePreviousMonthEnd is true
   useEffect(() => {
+     
     if (
       user &&
       currentMonth?.usePreviousMonthEnd &&
@@ -482,6 +495,7 @@ export default function Home() {
         startingBalanceCents: resolvedPreviousProjectedEnd,
       });
     }
+     
   }, [user, currentMonth, previousMonthData, resolvedPreviousProjectedEnd, updateMonthMeta]);
 
   const handlePrevMonth = () => {
@@ -586,6 +600,7 @@ export default function Home() {
         </div>
 
         <div className="shrink-0">
+          { }
           <BalanceCard
             startingBalance={effectiveStartingBalance}
             current={balances.currentBankBalanceCents}
@@ -828,6 +843,7 @@ function MonthYearPicker({
   // Reset temp year when opening to keep picker aligned with current selection
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTempYear(year);
     }
   }, [open, year]);

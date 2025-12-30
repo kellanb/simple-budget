@@ -87,12 +87,13 @@ export function YearlyLineItemRow({
       style={style}
       className={cn(
         "group transition-colors",
+        "border-b border-zinc-100 dark:border-zinc-800",
         "hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70",
         isDragging && "opacity-40 scale-[0.98] bg-blue-50 dark:bg-blue-900/30"
       )}
     >
       {/* Drag handle cell - 44px minimum touch target for mobile */}
-      <td className="px-0">
+      <td className="px-0 border-r border-zinc-100 dark:border-zinc-800">
         <button
           className={cn(
             "flex h-11 w-11 items-center justify-center cursor-grab active:cursor-grabbing touch-none",
@@ -107,11 +108,11 @@ export function YearlyLineItemRow({
       </td>
 
       {/* Data cells */}
-      {columns.map((col) => (
+      {columns.map((col, idx) => (
         <td
           key={col.key}
           className={cn(
-            "px-3 py-2 text-sm",
+            "px-3 py-2 text-sm text-left",
             // Allow text wrapping for text-based columns, nowrap for numeric/derived
             col.key === "label" || col.key === "paymentSource" || col.key === "dueDate"
               ? "break-words"
@@ -120,7 +121,9 @@ export function YearlyLineItemRow({
             col.align === "center" && "text-center",
             col.derived 
               ? "text-zinc-600 dark:text-zinc-400 italic" 
-              : "text-zinc-800 dark:text-zinc-200"
+              : "text-zinc-800 dark:text-zinc-200",
+            // Add subtle vertical border between columns (except last data column)
+            idx < columns.length - 1 && "border-r border-zinc-100 dark:border-zinc-800"
           )}
         >
           {renderCellValue(col.key)}
@@ -128,7 +131,7 @@ export function YearlyLineItemRow({
       ))}
 
       {/* Action buttons cell */}
-      <td className="px-2">
+      <td className="px-2 border-l border-zinc-100 dark:border-zinc-800">
         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onEdit}
@@ -260,7 +263,6 @@ export function YearlyLineItemRowOverlay({
   sectionKey: YearlySectionKey;
   totalIncomeMonthly: number;
 }) {
-  const columns = getColumnsForSection(sectionKey);
   const derivedValues = getDerivedValues(item, sectionKey, totalIncomeMonthly);
 
   const renderCellValue = (columnKey: string) => {

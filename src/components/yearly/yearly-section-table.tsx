@@ -1,9 +1,8 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { formatCurrency, percentOfIncome, parseMonthYear } from "@/lib/yearly-calculations";
 import type { YearlyLineItem, YearlySubsection as YearlySubsectionType, YearlySectionKey } from "./types";
@@ -96,22 +95,24 @@ export function YearlySectionTable({
           <thead>
             <tr className="border-b border-zinc-300 dark:border-zinc-600 bg-zinc-50/80 dark:bg-zinc-800/50">
               {/* Drag handle column */}
-              <th />
-              {columns.map((col) => (
+              <th className="border-r border-zinc-200 dark:border-zinc-700" />
+              {columns.map((col, idx) => (
                 <th
                   key={col.key}
                   className={cn(
-                    "px-3 py-2.5 text-xs font-bold uppercase tracking-wider",
+                    "px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-left",
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
-                    "text-zinc-700 dark:text-zinc-300"
+                    "text-zinc-700 dark:text-zinc-300",
+                    // Add subtle vertical border between columns (except last data column)
+                    idx < columns.length - 1 && "border-r border-zinc-200 dark:border-zinc-700"
                   )}
                 >
                   {col.label}
                 </th>
               ))}
               {/* Actions column */}
-              <th />
+              <th className="border-l border-zinc-200 dark:border-zinc-700" />
             </tr>
           </thead>
 
@@ -153,8 +154,8 @@ export function YearlySectionTable({
 
           {/* Add subsection button */}
           <tbody>
-            <tr className="border-t border-zinc-100 dark:border-zinc-800">
-              <td />
+            <tr className="border-t border-b border-zinc-100 dark:border-zinc-800">
+              <td className="border-r border-zinc-100 dark:border-zinc-800" />
               <td colSpan={columns.length} className="px-3 py-2">
                 <button
                   onClick={onAddSubsection}
@@ -168,7 +169,7 @@ export function YearlySectionTable({
                   Add subsection
                 </button>
               </td>
-              <td />
+              <td className="border-l border-zinc-100 dark:border-zinc-800" />
             </tr>
           </tbody>
 
@@ -241,8 +242,8 @@ function DroppableSectionItems({
         />
       ))}
       {/* Add section-level item button */}
-      <tr>
-        <td />
+      <tr className="border-b border-zinc-100 dark:border-zinc-800">
+        <td className="border-r border-zinc-100 dark:border-zinc-800" />
         <td colSpan={columns.length} className="px-3 py-2">
           <button
             onClick={onAddSectionItem}
@@ -256,7 +257,7 @@ function DroppableSectionItems({
             Add item
           </button>
         </td>
-        <td />
+        <td className="border-l border-zinc-100 dark:border-zinc-800" />
       </tr>
     </tbody>
   );

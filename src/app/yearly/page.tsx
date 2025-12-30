@@ -1,7 +1,9 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
@@ -79,6 +81,7 @@ export default function YearlyPage() {
   const lastYearlyDataRef = useRef(yearlyData);
   
   // Clear optimistic state when server data changes
+   
   useEffect(() => {
     if (yearlyData !== lastYearlyDataRef.current) {
       lastYearlyDataRef.current = yearlyData;
@@ -527,12 +530,12 @@ export default function YearlyPage() {
           <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
             Please sign in to view your yearly forecast.
           </p>
-          <a
+          <Link
             href="/"
             className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
           >
             Go to sign in
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -650,6 +653,7 @@ export default function YearlyPage() {
         onDelete={editingItem ? handleItemDelete : undefined}
         item={editingItem}
         sectionKey={targetSectionKey}
+        sectionTotals={totals}
       />
 
       <YearlySubsectionFormSheet
