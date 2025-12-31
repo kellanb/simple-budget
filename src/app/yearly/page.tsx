@@ -630,7 +630,7 @@ export default function YearlyPage() {
                   className="flex items-center gap-2"
                 >
                   <Copy className="h-4 w-4" />
-                  Copy from Previous Year
+                  Copy from Another Year
                 </Button>
               )}
             </div>

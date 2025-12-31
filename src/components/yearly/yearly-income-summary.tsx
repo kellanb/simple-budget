@@ -69,7 +69,7 @@ export function YearlyIncomeSummary({
               )}>
                 Each Paycheck
               </th>
-              <th className="w-20" />
+              <th className="w-28" />
             </tr>
           </thead>
           <SortableContext
@@ -102,7 +102,7 @@ export function YearlyIncomeSummary({
                     Add income
                   </button>
                 </td>
-                <td className="w-20" />
+                <td className="w-28" />
               </tr>
             </tbody>
           </SortableContext>
@@ -121,7 +121,7 @@ export function YearlyIncomeSummary({
               <td className="px-3 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-300 italic">
                 {formatCurrency(totals.incomeEachPaycheckDisplay)}
               </td>
-              <td className="w-20" />
+              <td className="w-28" />
             </tr>
 
             {/* Divider */}
@@ -223,29 +223,29 @@ function SortableIncomeRow({
         {formatCurrency(Math.round(item.amountCents / 2))}
       </td>
       {/* Action buttons - always visible for mobile accessibility */}
-      <td className="w-20 px-2">
-        <div className="flex items-center justify-end gap-1">
+      <td className="w-28 px-2">
+        <div className="flex items-center justify-end gap-2">
           <button
             onClick={() => onEditItem(item)}
             className={cn(
-              "rounded-lg p-1.5 transition-colors",
+              "rounded-lg p-2 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center",
               "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600",
               "dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             )}
             aria-label="Edit"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil className="h-4 w-4" />
           </button>
           <button
             onClick={() => onDeleteItem(item)}
             className={cn(
-              "rounded-lg p-1.5 transition-colors",
+              "rounded-lg p-2 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center",
               "text-zinc-400 hover:bg-rose-50 hover:text-rose-600",
               "dark:text-zinc-500 dark:hover:bg-rose-900/30 dark:hover:text-rose-400"
             )}
             aria-label="Delete"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </td>
@@ -287,7 +287,7 @@ function AfterRow({
       <td className="px-3 py-2 text-right text-sm font-medium text-zinc-600 dark:text-zinc-400">
         {pct.toFixed(1)}%
       </td>
-      <td className="w-20" />
+      <td className="w-28" />
     </tr>
   );
 }

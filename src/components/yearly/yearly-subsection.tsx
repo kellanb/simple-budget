@@ -91,31 +91,31 @@ export function YearlySubsection({
             colSpan={columns.length}
             className="px-3 py-2 border-r border-zinc-200 dark:border-zinc-700"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <span className="font-bold text-zinc-800 dark:text-zinc-100">
                 {subsection.title}
               </span>
               <button
                 onClick={onEditTitle}
                 className={cn(
-                  "rounded p-1 transition-colors",
+                  "rounded-lg p-2 transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center",
                   "text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700",
                   "dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
                 )}
                 aria-label="Edit subsection title"
               >
-                <Pencil className="h-3 w-3" />
+                <Pencil className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={onDelete}
                 className={cn(
-                  "rounded p-1 transition-colors",
+                  "rounded-lg p-2 transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center",
                   "text-zinc-500 hover:bg-rose-100 hover:text-rose-600",
                   "dark:text-zinc-400 dark:hover:bg-rose-900/30 dark:hover:text-rose-300"
                 )}
                 aria-label="Delete subsection"
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
               <span className="ml-auto text-sm font-semibold text-zinc-600 dark:text-zinc-300">
                 {subtotal}

@@ -21,6 +21,7 @@ function getColumnWidth(tailwindClass: string): string {
   const standardWidths: Record<string, string> = {
     "w-11": "44px",
     "w-20": "80px",
+    "w-28": "112px",
   };
   return standardWidths[tailwindClass] || "auto";
 }
@@ -89,7 +90,7 @@ export function YearlySectionTable({
             {columns.map((col) => (
               <col key={col.key} style={{ width: getColumnWidth(col.width) }} />
             ))}
-            <col style={{ width: "80px" }} />
+            <col style={{ width: "112px" }} />
           </colgroup>
           {/* Column headers */}
           <thead>
