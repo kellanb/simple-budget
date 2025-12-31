@@ -130,9 +130,9 @@ export function YearlyLineItemRow({
         </td>
       ))}
 
-      {/* Action buttons cell */}
+      {/* Action buttons cell - always visible for mobile accessibility */}
       <td className="px-2 border-l border-zinc-100 dark:border-zinc-800">
-        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-1">
           <button
             onClick={onEdit}
             className={cn(

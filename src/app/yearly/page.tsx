@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { arrayMove } from "@dnd-kit/sortable";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Copy } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "@/components/auth/auth-context";
@@ -33,6 +33,7 @@ import { computeSectionTotals, computeIncomeBreakdown } from "@/lib/yearly-calcu
 import type { YearlyLineItem, YearlySubsection, YearlySectionKey, YearlySubsectionSectionKey, LineItemFormValues, SubsectionFormValues } from "@/components/yearly/types";
 import { YEARLY_SUBSECTION_SECTION_DEFS } from "@/lib/yearly-constants";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // Drag types for identifying what's being dragged
 type DragData = 
@@ -52,6 +53,12 @@ export default function YearlyPage() {
     user ? { token: user.token, year: selectedYear } : "skip"
   );
 
+  // Fetch years that have data (for copy feature)
+  const yearsWithData = useQuery(
+    api.yearly.listYearsWithData,
+    user ? { token: user.token } : "skip"
+  );
+
   // Mutations
   const createSubsection = useMutation(api.yearly.createSubsection);
   const updateSubsection = useMutation(api.yearly.updateSubsection);
@@ -62,6 +69,10 @@ export default function YearlyPage() {
   const removeLineItem = useMutation(api.yearly.removeLineItem);
   const reorderLineItems = useMutation(api.yearly.reorderLineItems);
   const moveLineItem = useMutation(api.yearly.moveLineItem);
+  const copyFromYear = useMutation(api.yearly.copyFromYear);
+
+  // Copy from year modal state
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
 
   // DnD state
   const [activeData, setActiveData] = useState<DragData | null>(null);
@@ -504,6 +515,38 @@ export default function YearlyPage() {
     }
   }, [user, groupedData, selectedYear, reorderLineItems, reorderSubsections, moveLineItem]);
 
+  // Determine if current year is empty (no data)
+  // Important: only return true when data has LOADED and is empty, not while loading
+  const isCurrentYearEmpty = useMemo(() => {
+    if (!yearlyData) return false; // Still loading - don't show copy button yet
+    return yearlyData.sectionItems.length === 0 && yearlyData.subsections.length === 0;
+  }, [yearlyData]);
+
+  // Filter years available for copying (previous years with data, excluding current selection)
+  const availableYearsToCopy = useMemo(() => {
+    if (!yearsWithData) return [];
+    return yearsWithData.filter((year) => year !== selectedYear);
+  }, [yearsWithData, selectedYear]);
+
+  // Show copy button only if current year is empty and there are years to copy from
+  const showCopyButton = isCurrentYearEmpty && availableYearsToCopy.length > 0;
+
+  // Handle copy from year
+  const handleCopyFromYear = useCallback(async (sourceYear: number) => {
+    if (!user) return;
+    try {
+      setError(null);
+      await copyFromYear({
+        token: user.token,
+        sourceYear,
+        targetYear: selectedYear,
+      });
+      setCopyModalOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to copy from year");
+    }
+  }, [user, copyFromYear, selectedYear]);
+
   // Navigation items
   const navItems = [
     { label: "Monthly Forecast", href: "/", active: false },
@@ -577,9 +620,19 @@ export default function YearlyPage() {
               </div>
             )}
 
-            {/* Year selector */}
-            <div className="flex items-center justify-start">
+            {/* Year selector and copy button */}
+            <div className="flex items-center justify-start gap-4 flex-wrap">
               <YearSelector year={selectedYear} onChange={setSelectedYear} />
+              {showCopyButton && (
+                <Button
+                  variant="outline"
+                  onClick={() => setCopyModalOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy from Previous Year
+                </Button>
+              )}
             </div>
 
             {/* Loading state for data */}
@@ -663,7 +716,113 @@ export default function YearlyPage() {
         onDelete={editingSubsection ? handleSubsectionDelete : undefined}
         subsection={editingSubsection}
       />
+
+      {/* Copy from year modal */}
+      <CopyFromYearModal
+        open={copyModalOpen}
+        onOpenChange={setCopyModalOpen}
+        availableYears={availableYearsToCopy}
+        onCopy={handleCopyFromYear}
+      />
     </main>
+  );
+}
+
+// ============================================================================
+// Copy From Year Modal
+// ============================================================================
+
+function CopyFromYearModal({
+  open,
+  onOpenChange,
+  availableYears,
+  onCopy,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  availableYears: number[];
+  onCopy: (sourceYear: number) => Promise<void>;
+}) {
+  const [selectedYear, setSelectedYear] = useState<number | "">("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Reset modal state when it opens
+  useEffect(() => {
+    if (open) {
+      setSelectedYear("");
+      setIsSubmitting(false);
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    if (selectedYear === "") return;
+    setIsSubmitting(true);
+    try {
+      await onCopy(selectedYear);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => onOpenChange(false)}
+      />
+
+      {/* Modal */}
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-4">
+          Copy from Previous Year
+        </h2>
+        
+        <div className="space-y-4">
+          {/* Year selector */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+              Select year to copy from
+            </label>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 [color-scheme:light] dark:[color-scheme:dark]"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value === "" ? "" : Number(e.target.value))}
+            >
+              <option value="">Select a year...</option>
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            This will copy all income, bills, debt, savings, and investment items from the selected year to the current year.
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={selectedYear === "" || isSubmitting}
+          >
+            {isSubmitting ? "Copying..." : "Copy"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

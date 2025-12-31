@@ -222,8 +222,9 @@ function SortableIncomeRow({
       <td className="px-3 py-2 text-sm text-right text-zinc-600 dark:text-zinc-400 italic">
         {formatCurrency(Math.round(item.amountCents / 2))}
       </td>
+      {/* Action buttons - always visible for mobile accessibility */}
       <td className="w-20 px-2">
-        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-1">
           <button
             onClick={() => onEditItem(item)}
             className={cn(

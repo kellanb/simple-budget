@@ -225,6 +225,44 @@ export const listForYear = query({
 });
 
 // ============================================================================
+// Query: listYearsWithData
+// ============================================================================
+
+export const listYearsWithData = query({
+  args: {
+    token: v.string(),
+  },
+  returns: v.array(v.number()),
+  handler: async (ctx, { token }) => {
+    const { user } = await requireSession(ctx, token);
+
+    // Get all unique years from line items
+    const lineItems = await ctx.db
+      .query("yearlyLineItems")
+      .withIndex("by_user_and_year", (q) => q.eq("userId", user._id))
+      .collect();
+
+    // Get all unique years from subsections
+    const subsections = await ctx.db
+      .query("yearlySubsections")
+      .withIndex("by_user_and_year", (q) => q.eq("userId", user._id))
+      .collect();
+
+    // Combine and deduplicate years
+    const yearsSet = new Set<number>();
+    for (const item of lineItems) {
+      yearsSet.add(item.year);
+    }
+    for (const sub of subsections) {
+      yearsSet.add(sub.year);
+    }
+
+    // Return sorted array (descending - most recent first)
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  },
+});
+
+// ============================================================================
 // Subsection Mutations
 // ============================================================================
 
@@ -532,6 +570,114 @@ export const moveLineItem = mutation({
     // Reorder destination container (includes the moved item)
     for (let i = 0; i < args.destOrderedIds.length; i++) {
       await ctx.db.patch(args.destOrderedIds[i], { order: i });
+    }
+
+    return null;
+  },
+});
+
+// ============================================================================
+// Copy from Year Mutation
+// ============================================================================
+
+export const copyFromYear = mutation({
+  args: {
+    token: v.string(),
+    sourceYear: v.number(),
+    targetYear: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { token, sourceYear, targetYear }) => {
+    const { user } = await requireSession(ctx, token);
+
+    // Verify source and target years are different
+    if (sourceYear === targetYear) {
+      throw new Error("Source and target years must be different");
+    }
+
+    // Fetch all subsections from source year
+    const sourceSubsections = await ctx.db
+      .query("yearlySubsections")
+      .withIndex("by_user_and_year", (q) =>
+        q.eq("userId", user._id).eq("year", sourceYear),
+      )
+      .collect();
+
+    // Fetch all line items from source year
+    const sourceItems = await ctx.db
+      .query("yearlyLineItems")
+      .withIndex("by_user_and_year", (q) =>
+        q.eq("userId", user._id).eq("year", sourceYear),
+      )
+      .collect();
+
+    // Verify source year has data
+    if (sourceSubsections.length === 0 && sourceItems.length === 0) {
+      throw new Error("Source year has no data to copy");
+    }
+
+    // Check if target year already has data
+    const existingTargetSubsections = await ctx.db
+      .query("yearlySubsections")
+      .withIndex("by_user_and_year", (q) =>
+        q.eq("userId", user._id).eq("year", targetYear),
+      )
+      .collect();
+
+    const existingTargetItems = await ctx.db
+      .query("yearlyLineItems")
+      .withIndex("by_user_and_year", (q) =>
+        q.eq("userId", user._id).eq("year", targetYear),
+      )
+      .collect();
+
+    if (existingTargetSubsections.length > 0 || existingTargetItems.length > 0) {
+      throw new Error("Target year already has data");
+    }
+
+    // Create a mapping from old subsection IDs to new subsection IDs
+    const subsectionIdMap = new Map<Id<"yearlySubsections">, Id<"yearlySubsections">>();
+
+    // Copy all subsections
+    for (const sub of sourceSubsections) {
+      const newSubId = await ctx.db.insert("yearlySubsections", {
+        userId: user._id,
+        year: targetYear,
+        sectionKey: sub.sectionKey,
+        title: sub.title,
+        order: sub.order,
+      });
+      subsectionIdMap.set(sub._id, newSubId);
+    }
+
+    // Copy all line items
+    for (const item of sourceItems) {
+      // Map the subsectionId if it exists
+      const newSubsectionId = item.subsectionId
+        ? subsectionIdMap.get(item.subsectionId)
+        : undefined;
+
+      await ctx.db.insert("yearlyLineItems", {
+        userId: user._id,
+        year: targetYear,
+        sectionKey: item.sectionKey,
+        subsectionId: newSubsectionId,
+        label: item.label,
+        amountCents: item.amountCents,
+        order: item.order,
+        note: item.note,
+        paymentSource: item.paymentSource,
+        dueDate: item.dueDate,
+        frequency: item.frequency,
+        originalAmountCents: item.originalAmountCents,
+        balanceCents: item.balanceCents,
+        interestRate: item.interestRate,
+        goalAmountCents: item.goalAmountCents,
+        currentAmountCents: item.currentAmountCents,
+        startMonth: item.startMonth,
+        endMonth: item.endMonth,
+        paymentDay: item.paymentDay,
+      });
     }
 
     return null;
