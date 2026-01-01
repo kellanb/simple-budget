@@ -663,6 +663,7 @@ export default function YearlyPage() {
                 sectionItems={groupedData[section.key].sectionItems}
                 subsections={groupedData[section.key].subsections}
                 totalIncomeMonthly={totals.incomeMonthly}
+                sectionTotals={totals}
                 allItems={groupedData[section.key].allItems}
                 onAddSectionItem={() => handleAddItem(section.key)}
                 onAddSubsection={() => handleAddSubsection(section.key)}

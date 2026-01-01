@@ -46,6 +46,12 @@ const frequencyValidator = v.union(
   v.literal("irregular"),
 );
 
+const goalAmountTypeValidator = v.union(
+  v.literal("custom"),
+  v.literal("6months"),
+  v.literal("12months"),
+);
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -146,6 +152,7 @@ const lineItemValidator = v.object({
   balanceCents: v.optional(v.number()),
   interestRate: v.optional(v.number()),
   goalAmountCents: v.optional(v.number()),
+  goalAmountType: v.optional(goalAmountTypeValidator),
   currentAmountCents: v.optional(v.number()),
   startMonth: v.optional(v.string()),
   endMonth: v.optional(v.string()),
@@ -384,6 +391,7 @@ export const createLineItem = mutation({
     balanceCents: v.optional(v.number()),
     interestRate: v.optional(v.number()),
     goalAmountCents: v.optional(v.number()),
+    goalAmountType: v.optional(goalAmountTypeValidator),
     currentAmountCents: v.optional(v.number()),
     startMonth: v.optional(v.string()),
     endMonth: v.optional(v.string()),
@@ -430,6 +438,7 @@ export const createLineItem = mutation({
       balanceCents: args.balanceCents,
       interestRate: args.interestRate,
       goalAmountCents: args.goalAmountCents,
+      goalAmountType: args.goalAmountType,
       currentAmountCents: args.currentAmountCents,
       startMonth: args.startMonth,
       endMonth: args.endMonth,
@@ -453,6 +462,7 @@ export const updateLineItem = mutation({
       balanceCents: v.optional(v.number()),
       interestRate: v.optional(v.number()),
       goalAmountCents: v.optional(v.number()),
+      goalAmountType: v.optional(goalAmountTypeValidator),
       currentAmountCents: v.optional(v.number()),
       startMonth: v.optional(v.string()),
       endMonth: v.optional(v.string()),
@@ -561,9 +571,32 @@ export const moveLineItem = mutation({
     // Reorder source container (items remaining after move)
     for (let i = 0; i < args.sourceOrderedIds.length; i++) {
       const srcItem = await ensureLineItem(ctx, args.sourceOrderedIds[i], user._id);
+      if (
+        srcItem.year !== item.year ||
+        srcItem.sectionKey !== item.sectionKey ||
+        srcItem.subsectionId !== item.subsectionId
+      ) {
+        throw new Error("Line item does not match source container");
+      }
       // Only patch if it's in the source container
       if (srcItem._id !== args.lineItemId) {
         await ctx.db.patch(args.sourceOrderedIds[i], { order: i });
+      }
+    }
+
+    // Validate destination order - must include the moved item and only destination items
+    if (!args.destOrderedIds.includes(args.lineItemId)) {
+      throw new Error("Destination order must include the moved item");
+    }
+
+    for (let i = 0; i < args.destOrderedIds.length; i++) {
+      const destItem = await ensureLineItem(ctx, args.destOrderedIds[i], user._id);
+      if (
+        destItem.year !== item.year ||
+        destItem.sectionKey !== item.sectionKey ||
+        destItem.subsectionId !== args.toSubsectionId
+      ) {
+        throw new Error("Line item does not match destination container");
       }
     }
 
@@ -673,6 +706,7 @@ export const copyFromYear = mutation({
         balanceCents: item.balanceCents,
         interestRate: item.interestRate,
         goalAmountCents: item.goalAmountCents,
+        goalAmountType: item.goalAmountType,
         currentAmountCents: item.currentAmountCents,
         startMonth: item.startMonth,
         endMonth: item.endMonth,

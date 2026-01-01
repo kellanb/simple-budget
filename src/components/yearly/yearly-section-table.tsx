@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
-import { formatCurrency, percentOfIncome, parseMonthYear } from "@/lib/yearly-calculations";
+import { formatCurrency, percentOfIncome, parseMonthYear, type SectionTotals } from "@/lib/yearly-calculations";
 import type { YearlyLineItem, YearlySubsection as YearlySubsectionType, YearlySectionKey } from "./types";
 import { getColumnsForSection, sectionColors, sectionTitles } from "./column-definitions";
 import { SortableLineItemRow } from "./yearly-line-item-row";
@@ -31,6 +31,7 @@ type YearlySectionTableProps = {
   sectionItems: YearlyLineItem[]; // Items at section level (no subsection)
   subsections: YearlySubsectionType[];
   totalIncomeMonthly: number;
+  sectionTotals?: SectionTotals;
   allItems: YearlyLineItem[]; // All items for computing totals
   onAddSectionItem: () => void;
   onAddSubsection: () => void;
@@ -46,6 +47,7 @@ export function YearlySectionTable({
   sectionItems,
   subsections,
   totalIncomeMonthly,
+  sectionTotals,
   allItems,
   onAddSectionItem,
   onAddSubsection,
@@ -127,6 +129,7 @@ export function YearlySectionTable({
               sectionItems={sectionItems}
               columns={columns}
               totalIncomeMonthly={totalIncomeMonthly}
+              sectionTotals={sectionTotals}
               onAddSectionItem={onAddSectionItem}
               onEditItem={onEditItem}
               onDeleteItem={onDeleteItem}
@@ -144,6 +147,7 @@ export function YearlySectionTable({
                 subsection={subsection}
                 sectionKey={sectionKey}
                 totalIncomeMonthly={totalIncomeMonthly}
+                sectionTotals={sectionTotals}
                 onEditTitle={() => onEditSubsectionTitle(subsection)}
                 onDelete={() => onDeleteSubsection(subsection)}
                 onAddItem={() => onAddSubsectionItem(subsection)}
@@ -211,6 +215,7 @@ type DroppableSectionItemsProps = {
   sectionItems: YearlyLineItem[];
   columns: ReturnType<typeof getColumnsForSection>;
   totalIncomeMonthly: number;
+  sectionTotals?: SectionTotals;
   onAddSectionItem: () => void;
   onEditItem: (item: YearlyLineItem) => void;
   onDeleteItem: (item: YearlyLineItem) => void;
@@ -221,6 +226,7 @@ function DroppableSectionItems({
   sectionItems,
   columns,
   totalIncomeMonthly,
+  sectionTotals,
   onAddSectionItem,
   onEditItem,
   onDeleteItem,
@@ -238,6 +244,7 @@ function DroppableSectionItems({
           item={item}
           sectionKey={sectionKey}
           totalIncomeMonthly={totalIncomeMonthly}
+          sectionTotals={sectionTotals}
           onEdit={() => onEditItem(item)}
           onDelete={() => onDeleteItem(item)}
         />

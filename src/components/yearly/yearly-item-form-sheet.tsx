@@ -5,10 +5,8 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { YearlyLineItem, YearlySectionKey, LineItemFormValues, Frequency } from "./types";
+import type { YearlyLineItem, YearlySectionKey, LineItemFormValues, Frequency, GoalAmountType } from "./types";
 import { monthlyEquivalentFromOriginal, type SectionTotals, formatCurrency } from "@/lib/yearly-calculations";
-
-type GoalType = "custom" | "6months" | "12months";
 
 type YearlyItemFormSheetProps = {
   open: boolean;
@@ -48,7 +46,7 @@ export function YearlyItemFormSheet({
 }: YearlyItemFormSheetProps) {
   const [form, setForm] = useState<LineItemFormValues>(() => getDefaultValues(item, sectionKey));
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [goalType, setGoalType] = useState<GoalType>("custom");
+  const [goalType, setGoalType] = useState<GoalAmountType>("custom");
   
   // Use ref to track current form values synchronously (avoids async state issues)
   const formRef = useRef<LineItemFormValues>(form);
@@ -71,22 +69,22 @@ export function YearlyItemFormSheet({
   useEffect(() => {
     if (open) {
       const defaults = getDefaultValues(item, sectionKey);
+      
+      // Use stored goalAmountType if available, otherwise default to custom
+      const storedGoalType = item?.goalAmountType ?? "custom";
+      setGoalType(storedGoalType);
+      
+      // If goalAmountType is 6months or 12months, recalculate the goal amount based on current section totals
+      if (sectionKey === "savings" && storedGoalType !== "custom" && sectionTotals) {
+        const recalculatedGoal = storedGoalType === "6months" 
+          ? calculatedGoals.sixMonths 
+          : calculatedGoals.twelveMonths;
+        defaults.goalAmountCents = recalculatedGoal;
+        defaults.goalAmountType = storedGoalType;
+      }
+      
       setForm(defaults);
       formRef.current = defaults;
-      
-      // Determine goal type based on existing value
-      if (item?.goalAmountCents && sectionKey === "savings" && sectionTotals) {
-        const goal = item.goalAmountCents;
-        if (goal === calculatedGoals.sixMonths) {
-          setGoalType("6months");
-        } else if (goal === calculatedGoals.twelveMonths) {
-          setGoalType("12months");
-        } else {
-          setGoalType("custom");
-        }
-      } else {
-        setGoalType("custom");
-      }
     }
   }, [open, item, sectionKey, sectionTotals, calculatedGoals]);
 
@@ -198,7 +196,7 @@ export function YearlyItemFormSheet({
             <FormField
               label="Due Date"
               value={form.dueDate ?? ""}
-              onChange={(v) => updateForm((f) => ({ ...f, dueDate: v || undefined }))}
+              onChange={(v) => updateForm((f) => ({ ...f, dueDate: v }))}
               placeholder={sectionKey === "nonMonthlyBills" ? "e.g., 1/20, 4/20, 7/20" : "e.g., 1st, 15th"}
             />
           )}
@@ -207,7 +205,7 @@ export function YearlyItemFormSheet({
             <FormField
               label="Payment Source"
               value={form.paymentSource ?? ""}
-              onChange={(v) => updateForm((f) => ({ ...f, paymentSource: v || undefined }))}
+              onChange={(v) => updateForm((f) => ({ ...f, paymentSource: v }))}
               placeholder="e.g., Chase, Autopay"
             />
           )}
@@ -256,6 +254,7 @@ export function YearlyItemFormSheet({
                   type="button"
                   onClick={() => {
                     setGoalType("custom");
+                    updateForm((f) => ({ ...f, goalAmountType: "custom" }));
                   }}
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
@@ -270,7 +269,7 @@ export function YearlyItemFormSheet({
                   type="button"
                   onClick={() => {
                     setGoalType("6months");
-                    updateForm((f) => ({ ...f, goalAmountCents: calculatedGoals.sixMonths }));
+                    updateForm((f) => ({ ...f, goalAmountCents: calculatedGoals.sixMonths, goalAmountType: "6months" }));
                   }}
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
@@ -285,7 +284,7 @@ export function YearlyItemFormSheet({
                   type="button"
                   onClick={() => {
                     setGoalType("12months");
-                    updateForm((f) => ({ ...f, goalAmountCents: calculatedGoals.twelveMonths }));
+                    updateForm((f) => ({ ...f, goalAmountCents: calculatedGoals.twelveMonths, goalAmountType: "12months" }));
                   }}
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
@@ -337,7 +336,7 @@ export function YearlyItemFormSheet({
             <FormField
               label="Start Month"
               value={form.startMonth ?? ""}
-              onChange={(v) => updateForm((f) => ({ ...f, startMonth: v || undefined }))}
+              onChange={(v) => updateForm((f) => ({ ...f, startMonth: v }))}
               placeholder="e.g., Jan 2026"
             />
           )}
@@ -346,7 +345,7 @@ export function YearlyItemFormSheet({
             <FormField
               label="End Month"
               value={form.endMonth ?? ""}
-              onChange={(v) => updateForm((f) => ({ ...f, endMonth: v || undefined }))}
+              onChange={(v) => updateForm((f) => ({ ...f, endMonth: v }))}
               placeholder="e.g., Dec 2026"
             />
           )}
@@ -355,7 +354,7 @@ export function YearlyItemFormSheet({
             <FormField
               label="Payment Day"
               value={form.paymentDay ?? ""}
-              onChange={(v) => updateForm((f) => ({ ...f, paymentDay: v || undefined }))}
+              onChange={(v) => updateForm((f) => ({ ...f, paymentDay: v }))}
               placeholder="e.g., 16th"
             />
           )}
@@ -488,6 +487,7 @@ function getDefaultValues(item: YearlyLineItem | null, sectionKey: YearlySection
       balanceCents: item.balanceCents,
       interestRate: item.interestRate,
       goalAmountCents: item.goalAmountCents,
+      goalAmountType: item.goalAmountType,
       currentAmountCents: item.currentAmountCents,
       startMonth: item.startMonth,
       endMonth: item.endMonth,

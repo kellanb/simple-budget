@@ -2,6 +2,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import type { YearlySectionKey, YearlySubsectionSectionKey } from "@/lib/yearly-constants";
 
 export type Frequency = "monthly" | "quarterly" | "biannual" | "annual" | "irregular";
+export type GoalAmountType = "custom" | "6months" | "12months";
 
 export type YearlyLineItem = {
   _id: Id<"yearlyLineItems">;
@@ -21,6 +22,7 @@ export type YearlyLineItem = {
   balanceCents?: number;
   interestRate?: number;
   goalAmountCents?: number;
+  goalAmountType?: GoalAmountType;
   currentAmountCents?: number;
   startMonth?: string;
   endMonth?: string;
@@ -55,6 +57,7 @@ export type LineItemFormValues = {
   balanceCents?: number;
   interestRate?: number;
   goalAmountCents?: number;
+  goalAmountType?: GoalAmountType;
   currentAmountCents?: number;
   startMonth?: string;
   endMonth?: string;

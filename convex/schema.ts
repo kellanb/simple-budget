@@ -103,6 +103,9 @@ export default defineSchema({
     interestRate: v.optional(v.number()),
     // Savings fields
     goalAmountCents: v.optional(v.number()),
+    goalAmountType: v.optional(
+      v.union(v.literal("custom"), v.literal("6months"), v.literal("12months")),
+    ),
     currentAmountCents: v.optional(v.number()),
     // Month+year strings (sheet-like): e.g. "Jan 2026", "Dec 2027"
     startMonth: v.optional(v.string()),

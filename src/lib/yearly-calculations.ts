@@ -1,5 +1,6 @@
 // Type definitions for yearly calculations
 export type Frequency = "monthly" | "quarterly" | "biannual" | "annual" | "irregular";
+export type GoalAmountType = "custom" | "6months" | "12months";
 
 export type YearlyLineItem = {
   _id: string;
@@ -16,6 +17,7 @@ export type YearlyLineItem = {
   balanceCents?: number;
   interestRate?: number;
   goalAmountCents?: number;
+  goalAmountType?: GoalAmountType;
   currentAmountCents?: number;
   startMonth?: string;
   endMonth?: string;
@@ -144,8 +146,25 @@ export function monthsForGoalInclusive(
 }
 
 // Calculate savings monthly amount
-export function calculateSavingsMonthly(item: YearlyLineItem): number | null {
-  const goalAmountCents = item.goalAmountCents ?? 0;
+// Optional sectionTotals allows dynamic goal calculation for 6months/12months goal types
+export function calculateSavingsMonthly(
+  item: YearlyLineItem, 
+  sectionTotals?: Pick<SectionTotals, 'monthlyBillsMonthly' | 'debtMonthlyPayment' | 'nonMonthlyBillsAnnualTotal'>
+): number | null {
+  // Calculate dynamic goal amount if applicable
+  let goalAmountCents = item.goalAmountCents ?? 0;
+  
+  if (sectionTotals && item.goalAmountType && item.goalAmountType !== "custom") {
+    const monthlyExpenses = sectionTotals.monthlyBillsMonthly + sectionTotals.debtMonthlyPayment;
+    const nonMonthlyAnnual = sectionTotals.nonMonthlyBillsAnnualTotal;
+    
+    if (item.goalAmountType === "6months") {
+      goalAmountCents = (monthlyExpenses * 6) + nonMonthlyAnnual;
+    } else if (item.goalAmountType === "12months") {
+      goalAmountCents = (monthlyExpenses * 12) + nonMonthlyAnnual;
+    }
+  }
+  
   const currentAmountCents = item.currentAmountCents ?? 0;
 
   // Goal already met
@@ -162,6 +181,7 @@ export function calculateSavingsMonthly(item: YearlyLineItem): number | null {
 }
 
 // Sum items by section (already normalized to monthly)
+// Two-pass calculation: first calculate non-savings totals, then use those for dynamic savings goal calculation
 export function computeSectionTotals(items: YearlyLineItem[]): SectionTotals {
   let incomeMonthly = 0;
   let monthlyBillsMonthly = 0;
@@ -174,6 +194,7 @@ export function computeSectionTotals(items: YearlyLineItem[]): SectionTotals {
   let savingsCurrentTotal = 0;
   let investmentsMonthly = 0;
 
+  // First pass: calculate non-savings totals
   for (const item of items) {
     switch (item.sectionKey) {
       case "income":
@@ -200,19 +221,41 @@ export function computeSectionTotals(items: YearlyLineItem[]): SectionTotals {
         debtBalanceTotal += item.balanceCents ?? 0;
         break;
 
-      case "savings": {
-        const monthly = calculateSavingsMonthly(item);
-        if (monthly !== null) {
-          savingsMonthly += monthly;
-        }
-        savingsGoalTotal += item.goalAmountCents ?? 0;
-        savingsCurrentTotal += item.currentAmountCents ?? 0;
-        break;
-      }
-
       case "investments":
         investmentsMonthly += item.amountCents;
         break;
+    }
+  }
+
+  // Create partial totals for dynamic goal calculation
+  const partialTotals = {
+    monthlyBillsMonthly,
+    debtMonthlyPayment,
+    nonMonthlyBillsAnnualTotal,
+  };
+
+  // Second pass: calculate savings totals using the expense totals for dynamic goal amounts
+  for (const item of items) {
+    if (item.sectionKey === "savings") {
+      // Calculate dynamic goal amount for items with 6months/12months goal type
+      let effectiveGoalAmount = item.goalAmountCents ?? 0;
+      
+      if (item.goalAmountType && item.goalAmountType !== "custom") {
+        const monthlyExpenses = monthlyBillsMonthly + debtMonthlyPayment;
+        if (item.goalAmountType === "6months") {
+          effectiveGoalAmount = (monthlyExpenses * 6) + nonMonthlyBillsAnnualTotal;
+        } else if (item.goalAmountType === "12months") {
+          effectiveGoalAmount = (monthlyExpenses * 12) + nonMonthlyBillsAnnualTotal;
+        }
+      }
+      
+      // Calculate monthly savings using the effective goal amount
+      const monthly = calculateSavingsMonthly(item, partialTotals);
+      if (monthly !== null) {
+        savingsMonthly += monthly;
+      }
+      savingsGoalTotal += effectiveGoalAmount;
+      savingsCurrentTotal += item.currentAmountCents ?? 0;
     }
   }
 

@@ -7,7 +7,7 @@ import type { DraggableAttributes } from "@dnd-kit/core";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import { formatCurrency, parseMonthYear } from "@/lib/yearly-calculations";
+import { formatCurrency, parseMonthYear, type SectionTotals } from "@/lib/yearly-calculations";
 import type { YearlySubsection as YearlySubsectionType, YearlyLineItem, YearlySectionKey, YearlySubsectionSectionKey } from "./types";
 import { getColumnsForSection } from "./column-definitions";
 import { SortableLineItemRow } from "./yearly-line-item-row";
@@ -16,6 +16,7 @@ type YearlySubsectionProps = {
   subsection: YearlySubsectionType;
   sectionKey: YearlySectionKey;
   totalIncomeMonthly: number;
+  sectionTotals?: SectionTotals;
   onEditTitle: () => void;
   onDelete: () => void;
   onAddItem: () => void;
@@ -32,6 +33,7 @@ export function YearlySubsection({
   subsection,
   sectionKey,
   totalIncomeMonthly,
+  sectionTotals,
   onEditTitle,
   onDelete,
   onAddItem,
@@ -132,6 +134,7 @@ export function YearlySubsection({
             item={item}
             sectionKey={sectionKey}
             totalIncomeMonthly={totalIncomeMonthly}
+            sectionTotals={sectionTotals}
             onEdit={() => onEditItem(item)}
             onDelete={() => onDeleteItem(item)}
           />

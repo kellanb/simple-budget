@@ -6,7 +6,7 @@ import type { DraggableAttributes } from "@dnd-kit/core";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import { formatCurrency, calculateSavingsMonthly, monthsForGoalInclusive, percentOfIncome } from "@/lib/yearly-calculations";
+import { formatCurrency, calculateSavingsMonthly, monthsForGoalInclusive, percentOfIncome, type SectionTotals } from "@/lib/yearly-calculations";
 import type { YearlyLineItem, YearlySectionKey } from "./types";
 import { getColumnsForSection } from "./column-definitions";
 
@@ -14,6 +14,7 @@ type YearlyLineItemRowProps = {
   item: YearlyLineItem;
   sectionKey: YearlySectionKey;
   totalIncomeMonthly: number;
+  sectionTotals?: SectionTotals;
   onEdit: () => void;
   onDelete: () => void;
   isDragging?: boolean;
@@ -27,6 +28,7 @@ export function YearlyLineItemRow({
   item,
   sectionKey,
   totalIncomeMonthly,
+  sectionTotals,
   onEdit,
   onDelete,
   isDragging,
@@ -37,8 +39,27 @@ export function YearlyLineItemRow({
 }: YearlyLineItemRowProps) {
   const columns = getColumnsForSection(sectionKey);
 
-  // Calculate derived values
-  const derivedValues = getDerivedValues(item, sectionKey, totalIncomeMonthly);
+  // Calculate derived values - pass sectionTotals for savings calculations
+  const derivedValues = getDerivedValues(item, sectionKey, totalIncomeMonthly, sectionTotals);
+  
+  // Calculate dynamic goal amount for savings items with non-custom goal types
+  const getGoalAmount = () => {
+    if (sectionKey !== "savings" || !sectionTotals || !item.goalAmountType || item.goalAmountType === "custom") {
+      return item.goalAmountCents;
+    }
+    
+    // Calculate goal based on type
+    const monthlyExpenses = sectionTotals.monthlyBillsMonthly + sectionTotals.debtMonthlyPayment;
+    const nonMonthlyAnnual = sectionTotals.nonMonthlyBillsAnnualTotal;
+    
+    if (item.goalAmountType === "6months") {
+      return (monthlyExpenses * 6) + nonMonthlyAnnual;
+    } else if (item.goalAmountType === "12months") {
+      return (monthlyExpenses * 12) + nonMonthlyAnnual;
+    }
+    
+    return item.goalAmountCents;
+  };
 
   const renderCellValue = (columnKey: string) => {
     // Handle derived columns
@@ -66,8 +87,10 @@ export function YearlyLineItemRow({
         return item.balanceCents ? formatCurrency(item.balanceCents) : "—";
       case "interestRate":
         return item.interestRate !== undefined ? `${item.interestRate}%` : "—";
-      case "goalAmountCents":
-        return item.goalAmountCents ? formatCurrency(item.goalAmountCents) : "—";
+      case "goalAmountCents": {
+        const goalAmount = getGoalAmount();
+        return goalAmount ? formatCurrency(goalAmount) : "—";
+      }
       case "currentAmountCents":
         return item.currentAmountCents !== undefined ? formatCurrency(item.currentAmountCents) : "—";
       case "startMonth":
@@ -205,7 +228,8 @@ export function SortableLineItemRow(props: SortableLineItemRowProps) {
 function getDerivedValues(
   item: YearlyLineItem,
   sectionKey: YearlySectionKey,
-  totalIncomeMonthly: number
+  totalIncomeMonthly: number,
+  sectionTotals?: SectionTotals
 ): Record<string, string> {
   const derived: Record<string, string> = {};
 
@@ -224,11 +248,11 @@ function getDerivedValues(
         derived.monthsForGoal = "—";
       }
 
-      // Monthly savings amount
-      const monthlySavings = calculateSavingsMonthly({
-        ...item,
-        sectionKey: item.sectionKey,
-      });
+      // Monthly savings amount - pass sectionTotals for dynamic goal calculation
+      const monthlySavings = calculateSavingsMonthly(
+        { ...item, sectionKey: item.sectionKey },
+        sectionTotals
+      );
       if (monthlySavings !== null) {
         derived.amountCents = formatCurrency(monthlySavings);
         derived.biMonthly = formatCurrency(Math.round(monthlySavings / 2));
