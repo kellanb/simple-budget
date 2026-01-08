@@ -1,8 +1,6 @@
 "use client";
 
-import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { ArrowUpDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, percentOfIncome } from "@/lib/yearly-calculations";
 import type { YearlyLineItem } from "./types";
@@ -16,6 +14,7 @@ type YearlyIncomeSummaryProps = {
   onAddItem: () => void;
   onEditItem: (item: YearlyLineItem) => void;
   onDeleteItem: (item: YearlyLineItem) => void;
+  onReorder: () => void;
 };
 
 export function YearlyIncomeSummary({
@@ -25,6 +24,7 @@ export function YearlyIncomeSummary({
   onAddItem,
   onEditItem,
   onDeleteItem,
+  onReorder,
 }: YearlyIncomeSummaryProps) {
   const colors = sectionColors.income;
 
@@ -39,18 +39,37 @@ export function YearlyIncomeSummary({
     >
       {/* Section header */}
       <div className={cn("px-4 py-3", colors.bg)}>
-        <h2 className={cn("text-lg font-bold", colors.text)}>
-          Income Summary
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className={cn("text-lg font-bold", colors.text)}>
+            Income Summary
+          </h2>
+          <button
+            onClick={onReorder}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-all shadow-sm",
+              "hover:shadow-md hover:brightness-95 dark:hover:brightness-110",
+              colors.bg,
+              colors.border,
+              colors.text
+            )}
+          >
+            <ArrowUpDown className="h-4 w-4" />
+            Reorder
+          </button>
+        </div>
       </div>
 
       {/* Income items table */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[400px]">
+        <table className="w-full min-w-[520px] table-fixed">
+          <colgroup>
+            <col style={{ width: "45%" }} />
+            <col style={{ width: "25%" }} />
+            <col style={{ width: "25%" }} />
+            <col style={{ width: "110px" }} />
+          </colgroup>
           <thead>
             <tr className="border-b border-zinc-300 dark:border-zinc-600 bg-zinc-50/80 dark:bg-zinc-800/50">
-              {/* Drag handle column - 44px for touch targets */}
-              <th className="w-11" />
               <th className={cn(
                 "px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider",
                 "text-zinc-700 dark:text-zinc-300"
@@ -72,47 +91,40 @@ export function YearlyIncomeSummary({
               <th className="w-28" />
             </tr>
           </thead>
-          <SortableContext
-            items={incomeItems.map(i => i._id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <tbody>
-              {incomeItems.map((item) => (
-                <SortableIncomeRow
-                  key={item._id}
-                  item={item}
-                  onEditItem={onEditItem}
-                  onDeleteItem={onDeleteItem}
-                />
-              ))}
+          <tbody>
+            {incomeItems.map((item) => (
+              <IncomeRow
+                key={item._id}
+                item={item}
+                onEditItem={onEditItem}
+                onDeleteItem={onDeleteItem}
+              />
+            ))}
 
-              {/* Add income item row */}
-              <tr>
-                <td className="w-11" />
-                <td colSpan={3} className="px-3 py-2">
-                  <button
-                    onClick={onAddItem}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm transition-colors",
-                      "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600",
-                      "dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-                    )}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add income
-                  </button>
-                </td>
-                <td className="w-28" />
-              </tr>
-            </tbody>
-          </SortableContext>
+            {/* Add income item row */}
+            <tr>
+              <td colSpan={3} className="px-3 py-2">
+                <button
+                  onClick={onAddItem}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm transition-colors",
+                    "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600",
+                    "dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                  )}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add income
+                </button>
+              </td>
+              <td className="w-28" />
+            </tr>
+          </tbody>
 
           {/* Totals section */}
           <tfoot>
             {/* Total Income row */}
             <tr className="border-t-2 border-emerald-300 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900/50">
-              <td className="w-11" />
-              <td className="px-3 py-3 font-bold text-base text-emerald-800 dark:text-emerald-200">
+              <td className="pl-5 pr-3 py-3 font-bold text-base text-emerald-800 dark:text-emerald-200">
                 Total Income
               </td>
               <td className="px-3 py-3 text-right font-bold text-base text-emerald-800 dark:text-emerald-200">
@@ -126,7 +138,7 @@ export function YearlyIncomeSummary({
 
             {/* Divider */}
             <tr>
-              <td colSpan={5} className="h-2" />
+              <td colSpan={4} className="h-2" />
             </tr>
 
             {/* After X breakdown rows */}
@@ -163,8 +175,8 @@ export function YearlyIncomeSummary({
   );
 }
 
-// Sortable income row component
-function SortableIncomeRow({
+// Income row component (non-sortable)
+function IncomeRow({
   item,
   onEditItem,
   onDeleteItem,
@@ -173,47 +185,13 @@ function SortableIncomeRow({
   onEditItem: (item: YearlyLineItem) => void;
   onDeleteItem: (item: YearlyLineItem) => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: item._id,
-    data: { type: "incomeLineItem", sectionKey: "income" as const, item },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
   return (
     <tr
-      ref={setNodeRef}
-      style={style}
       className={cn(
-        "group hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70 transition-colors",
-        isDragging && "opacity-40 scale-[0.98] bg-emerald-50 dark:bg-emerald-900/30"
+        "group hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70 transition-colors"
       )}
     >
-      {/* Drag handle - 44px minimum touch target for mobile */}
-      <td className="w-11 px-0">
-        <button
-          className={cn(
-            "flex h-11 w-11 items-center justify-center cursor-grab active:cursor-grabbing touch-none",
-            "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200 rounded-lg transition-colors",
-            "dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-zinc-700"
-          )}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-5 w-5" />
-        </button>
-      </td>
-      <td className="px-3 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+      <td className="pl-5 pr-3 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
         {item.label}
       </td>
       <td className="px-3 py-2 text-sm text-right font-semibold text-emerald-700 dark:text-emerald-300">
@@ -272,8 +250,7 @@ function AfterRow({
       "hover:bg-zinc-50 dark:hover:bg-zinc-800/30",
       isLast && "border-b-0"
     )}>
-      <td className="w-11" />
-      <td className="px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+      <td className="pl-5 pr-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
         {label}
       </td>
       <td className={cn(

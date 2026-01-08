@@ -1,10 +1,6 @@
 "use client";
 
-import { GripVertical, Pencil, Trash2 } from "lucide-react";
-import { useSortable } from "@dnd-kit/sortable";
-import type { DraggableAttributes } from "@dnd-kit/core";
-import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
-import { CSS } from "@dnd-kit/utilities";
+import { Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, calculateSavingsMonthly, monthsForGoalInclusive, percentOfIncome, type SectionTotals } from "@/lib/yearly-calculations";
 import type { YearlyLineItem, YearlySectionKey } from "./types";
@@ -17,11 +13,6 @@ type YearlyLineItemRowProps = {
   sectionTotals?: SectionTotals;
   onEdit: () => void;
   onDelete: () => void;
-  isDragging?: boolean;
-  dragHandleProps?: DraggableAttributes;
-  dragListeners?: SyntheticListenerMap;
-  style?: React.CSSProperties;
-  setNodeRef?: (node: HTMLElement | null) => void;
 };
 
 export function YearlyLineItemRow({
@@ -31,11 +22,6 @@ export function YearlyLineItemRow({
   sectionTotals,
   onEdit,
   onDelete,
-  isDragging,
-  dragHandleProps,
-  dragListeners,
-  style,
-  setNodeRef,
 }: YearlyLineItemRowProps) {
   const columns = getColumnsForSection(sectionKey);
 
@@ -106,36 +92,20 @@ export function YearlyLineItemRow({
 
   return (
     <tr
-      ref={setNodeRef}
-      style={style}
       className={cn(
         "group transition-colors",
         "border-b border-zinc-100 dark:border-zinc-800",
-        "hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70",
-        isDragging && "opacity-40 scale-[0.98] bg-blue-50 dark:bg-blue-900/30"
+        "hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70"
       )}
     >
-      {/* Drag handle cell - 44px minimum touch target for mobile */}
-      <td className="px-0 border-r border-zinc-100 dark:border-zinc-800">
-        <button
-          className={cn(
-            "flex h-11 w-11 items-center justify-center cursor-grab active:cursor-grabbing touch-none",
-            "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200 rounded-lg transition-colors",
-            "dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-zinc-700"
-          )}
-          {...dragHandleProps}
-          {...dragListeners}
-        >
-          <GripVertical className="h-5 w-5" />
-        </button>
-      </td>
-
       {/* Data cells */}
       {columns.map((col, idx) => (
         <td
           key={col.key}
           className={cn(
-            "px-3 py-2 text-sm text-left",
+            "py-2 text-sm text-left",
+            // Add extra left padding for the first column (label) to create space from section edge
+            idx === 0 ? "pl-5 pr-3" : "px-3",
             // Allow text wrapping for text-based columns, nowrap for numeric/derived
             col.key === "label" || col.key === "paymentSource" || col.key === "dueDate"
               ? "break-words"
@@ -181,46 +151,6 @@ export function YearlyLineItemRow({
         </div>
       </td>
     </tr>
-  );
-}
-
-// Sortable version of YearlyLineItemRow
-type SortableLineItemRowProps = Omit<YearlyLineItemRowProps, 'isDragging' | 'dragHandleProps' | 'dragListeners' | 'style' | 'setNodeRef'>;
-
-export function SortableLineItemRow(props: SortableLineItemRowProps) {
-  const { item, sectionKey } = props;
-  
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: item._id,
-    data: { 
-      type: "lineItem", 
-      sectionKey, 
-      subsectionId: item.subsectionId, 
-      item 
-    },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <YearlyLineItemRow
-      {...props}
-      isDragging={isDragging}
-      dragHandleProps={attributes}
-      dragListeners={listeners}
-      style={style}
-      setNodeRef={setNodeRef}
-    />
   );
 }
 
@@ -275,45 +205,5 @@ function getDerivedValues(
   }
 
   return derived;
-}
-
-// Overlay version for drag preview
-export function YearlyLineItemRowOverlay({
-  item,
-  sectionKey,
-  totalIncomeMonthly,
-}: {
-  item: YearlyLineItem;
-  sectionKey: YearlySectionKey;
-  totalIncomeMonthly: number;
-}) {
-  const derivedValues = getDerivedValues(item, sectionKey, totalIncomeMonthly);
-
-  const renderCellValue = (columnKey: string) => {
-    if (columnKey in derivedValues) {
-      return derivedValues[columnKey];
-    }
-    switch (columnKey) {
-      case "label":
-        return item.label;
-      case "amountCents":
-        return formatCurrency(item.amountCents);
-      default:
-        return "—";
-    }
-  };
-
-  return (
-    <div className={cn(
-      "flex items-center gap-2 rounded-lg border-2 border-blue-400 bg-white p-2 shadow-xl",
-      "dark:border-blue-500 dark:bg-zinc-900"
-    )}>
-      <GripVertical className="h-4 w-4 text-blue-500" />
-      <span className="font-medium text-zinc-900 dark:text-zinc-50">{item.label}</span>
-      <span className="text-zinc-500 dark:text-zinc-400">
-        {renderCellValue("amountCents")}
-      </span>
-    </div>
-  );
 }
 

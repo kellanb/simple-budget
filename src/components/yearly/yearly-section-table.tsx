@@ -1,14 +1,12 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { useDroppable } from "@dnd-kit/core";
+import { ArrowUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, percentOfIncome, parseMonthYear, type SectionTotals } from "@/lib/yearly-calculations";
 import type { YearlyLineItem, YearlySubsection as YearlySubsectionType, YearlySectionKey } from "./types";
 import { getColumnsForSection, sectionColors, sectionTitles } from "./column-definitions";
-import { SortableLineItemRow } from "./yearly-line-item-row";
-import { SortableSubsection } from "./yearly-subsection";
+import { YearlyLineItemRow } from "./yearly-line-item-row";
+import { YearlySubsection } from "./yearly-subsection";
 
 // Helper to convert Tailwind width class to CSS width value
 function getColumnWidth(tailwindClass: string): string {
@@ -40,6 +38,7 @@ type YearlySectionTableProps = {
   onAddSubsectionItem: (subsection: YearlySubsectionType) => void;
   onEditItem: (item: YearlyLineItem) => void;
   onDeleteItem: (item: YearlyLineItem) => void;
+  onReorder: () => void;
 };
 
 export function YearlySectionTable({
@@ -56,6 +55,7 @@ export function YearlySectionTable({
   onAddSubsectionItem,
   onEditItem,
   onDeleteItem,
+  onReorder,
 }: YearlySectionTableProps) {
   const columns = getColumnsForSection(sectionKey);
   const colors = sectionColors[sectionKey];
@@ -78,9 +78,24 @@ export function YearlySectionTable({
     >
       {/* Section header */}
       <div className={cn("px-4 py-3", colors.bg)}>
-        <h2 className={cn("text-lg font-bold", colors.text)}>
-          {title}
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className={cn("text-lg font-bold", colors.text)}>
+            {title}
+          </h2>
+          <button
+            onClick={onReorder}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-all shadow-sm",
+              "hover:shadow-md hover:brightness-95 dark:hover:brightness-110",
+              colors.bg,
+              colors.border,
+              colors.text
+            )}
+          >
+            <ArrowUpDown className="h-4 w-4" />
+            Reorder
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -88,7 +103,6 @@ export function YearlySectionTable({
         <table className="w-full min-w-[600px] table-fixed">
           {/* Define column widths for consistent alignment - use inline styles for <col> elements */}
           <colgroup>
-            <col style={{ width: "44px" }} />
             {columns.map((col) => (
               <col key={col.key} style={{ width: getColumnWidth(col.width) }} />
             ))}
@@ -97,8 +111,6 @@ export function YearlySectionTable({
           {/* Column headers */}
           <thead>
             <tr className="border-b border-zinc-300 dark:border-zinc-600 bg-zinc-50/80 dark:bg-zinc-800/50">
-              {/* Drag handle column */}
-              <th className="border-r border-zinc-200 dark:border-zinc-700" />
               {columns.map((col, idx) => (
                 <th
                   key={col.key}
@@ -120,47 +132,36 @@ export function YearlySectionTable({
           </thead>
 
           {/* Section-level items (items without a subsection) */}
-          <SortableContext
-            items={sectionItems.map(i => i._id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <DroppableSectionItems
+          <DroppableSectionItems
+            sectionKey={sectionKey}
+            sectionItems={sectionItems}
+            columns={columns}
+            totalIncomeMonthly={totalIncomeMonthly}
+            sectionTotals={sectionTotals}
+            onAddSectionItem={onAddSectionItem}
+            onEditItem={onEditItem}
+            onDeleteItem={onDeleteItem}
+          />
+
+          {/* Subsections */}
+          {subsections.map((subsection) => (
+            <YearlySubsection
+              key={subsection._id}
+              subsection={subsection}
               sectionKey={sectionKey}
-              sectionItems={sectionItems}
-              columns={columns}
               totalIncomeMonthly={totalIncomeMonthly}
               sectionTotals={sectionTotals}
-              onAddSectionItem={onAddSectionItem}
+              onEditTitle={() => onEditSubsectionTitle(subsection)}
+              onDelete={() => onDeleteSubsection(subsection)}
+              onAddItem={() => onAddSubsectionItem(subsection)}
               onEditItem={onEditItem}
               onDeleteItem={onDeleteItem}
             />
-          </SortableContext>
-
-          {/* Subsections */}
-          <SortableContext
-            items={subsections.map(s => s._id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {subsections.map((subsection) => (
-              <SortableSubsection
-                key={subsection._id}
-                subsection={subsection}
-                sectionKey={sectionKey}
-                totalIncomeMonthly={totalIncomeMonthly}
-                sectionTotals={sectionTotals}
-                onEditTitle={() => onEditSubsectionTitle(subsection)}
-                onDelete={() => onDeleteSubsection(subsection)}
-                onAddItem={() => onAddSubsectionItem(subsection)}
-                onEditItem={onEditItem}
-                onDeleteItem={onDeleteItem}
-              />
-            ))}
-          </SortableContext>
+          ))}
 
           {/* Add subsection button */}
           <tbody>
             <tr className="border-t border-b border-zinc-100 dark:border-zinc-800">
-              <td className="border-r border-zinc-100 dark:border-zinc-800" />
               <td colSpan={columns.length} className="px-3 py-2">
                 <button
                   onClick={onAddSubsection}
@@ -181,7 +182,6 @@ export function YearlySectionTable({
           {/* Section footer with totals */}
           <tfoot>
             <tr className={cn("border-t-2", colors.border, colors.bg)}>
-              <td />
               <td
                 colSpan={columns.length}
                 className="px-3 py-3"
@@ -231,15 +231,10 @@ function DroppableSectionItems({
   onEditItem,
   onDeleteItem,
 }: DroppableSectionItemsProps) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `section-${sectionKey}`,
-    data: { type: "droppableContainer", containerId: `section-${sectionKey}` },
-  });
-
   return (
-    <tbody ref={setNodeRef} className={cn(isOver && "bg-blue-50/50 dark:bg-blue-900/10")}>
+    <tbody>
       {sectionItems.map((item) => (
-        <SortableLineItemRow
+        <YearlyLineItemRow
           key={item._id}
           item={item}
           sectionKey={sectionKey}
@@ -251,7 +246,6 @@ function DroppableSectionItems({
       ))}
       {/* Add section-level item button */}
       <tr className="border-b border-zinc-100 dark:border-zinc-800">
-        <td className="border-r border-zinc-100 dark:border-zinc-800" />
         <td colSpan={columns.length} className="px-3 py-2">
           <button
             onClick={onAddSectionItem}

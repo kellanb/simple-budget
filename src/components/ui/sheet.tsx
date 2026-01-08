@@ -10,29 +10,44 @@ export function SheetContent({
   className,
   children,
   title,
+  position = "center",
+  hideHeader = false,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   title?: string;
+  position?: "center" | "right";
+  hideHeader?: boolean;
 }) {
+  const isRight = position === "right";
+
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
       <DialogPrimitive.Content
         aria-describedby={undefined}
         className={cn(
-          "dialog-content-centered z-50 w-[calc(100%-2rem)] max-w-md rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in dark:border-zinc-800 dark:bg-zinc-900 max-h-[85vh] overflow-y-auto",
+          "z-50 border border-zinc-200 bg-white shadow-xl data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in dark:border-zinc-800 dark:bg-zinc-900",
+          isRight
+            ? "fixed inset-0 h-full max-h-dvh w-full overflow-y-auto p-4 md:inset-y-0 md:right-0 md:left-auto md:top-0 md:w-[480px] md:max-w-[520px] md:rounded-l-2xl md:border-l md:border-t md:border-b md:shadow-2xl"
+            : "dialog-content-centered w-[calc(100%-2rem)] max-w-md rounded-2xl p-4 max-h-[85vh] overflow-y-auto",
           className,
         )}
         {...props}
       >
-        <div className="mb-2 flex items-center justify-between">
-          <DialogPrimitive.Title className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-            {title}
-          </DialogPrimitive.Title>
-          <DialogPrimitive.Close className="rounded-full p-1 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:hover:bg-zinc-800">
-            <X className="h-5 w-5" />
-          </DialogPrimitive.Close>
-        </div>
+        {hideHeader ? (
+          title ? (
+            <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+          ) : null
+        ) : (
+          <div className="mb-2 flex items-center justify-between">
+            <DialogPrimitive.Title className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              {title}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Close className="rounded-full p-1 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:hover:bg-zinc-800">
+              <X className="h-5 w-5" />
+            </DialogPrimitive.Close>
+          </div>
+        )}
         {children}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
